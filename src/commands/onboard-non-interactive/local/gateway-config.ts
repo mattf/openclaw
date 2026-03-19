@@ -31,8 +31,8 @@ export function applyNonInteractiveGatewayConfig(params: {
   const port = hasGatewayPort ? (opts.gatewayPort as number) : params.defaultPort;
   let bind = opts.gatewayBind ?? "loopback";
   const authModeRaw = opts.gatewayAuth ?? "token";
-  if (authModeRaw !== "token" && authModeRaw !== "password") {
-    runtime.error("Invalid --gateway-auth (use token|password).");
+  if (authModeRaw !== "token" && authModeRaw !== "password" && authModeRaw !== "trusted-proxy") {
+    runtime.error("Invalid --gateway-auth (use token|password|trusted-proxy).");
     runtime.exit(1);
     return null;
   }
@@ -130,6 +130,66 @@ export function applyNonInteractiveGatewayConfig(params: {
         },
       },
     };
+  }
+
+  if (authMode === "trusted-proxy") {
+    const parseList = (raw: string | string[] | undefined): string[] => {
+      if (!raw) {
+        return [];
+      }
+      if (Array.isArray(raw)) {
+        return raw
+          .flatMap((s) => s.split(","))
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+      return raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    };
+
+    const trustedProxies = parseList(opts.gatewayTrustedProxies);
+    if (trustedProxies.length === 0) {
+      runtime.error("--gateway-trusted-proxies is required for trusted-proxy auth.");
+      runtime.exit(1);
+      return null;
+    }
+
+    const userHeader = (opts.gatewayTrustedProxyUserHeader ?? "x-forwarded-user").trim();
+    const requiredHeaders = parseList(opts.gatewayTrustedProxyRequiredHeaders);
+    const allowUsers = parseList(opts.gatewayTrustedProxyAllowUsers);
+
+    nextConfig = {
+      ...nextConfig,
+      gateway: {
+        ...nextConfig.gateway,
+        auth: {
+          ...nextConfig.gateway?.auth,
+          mode: "trusted-proxy",
+          trustedProxy: {
+            userHeader,
+            ...(requiredHeaders.length > 0 ? { requiredHeaders } : {}),
+            ...(allowUsers.length > 0 ? { allowUsers } : {}),
+          },
+        },
+        trustedProxies,
+      },
+    };
+
+    const allowedOrigins = parseList(opts.gatewayControlUiAllowedOrigins);
+    if (allowedOrigins.length > 0) {
+      nextConfig = {
+        ...nextConfig,
+        gateway: {
+          ...nextConfig.gateway,
+          controlUi: {
+            ...nextConfig.gateway?.controlUi,
+            allowedOrigins,
+          },
+        },
+      };
+    }
   }
 
   nextConfig = {
