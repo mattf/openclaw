@@ -469,6 +469,8 @@ export type ToolsConfig = {
       cacheTtlMinutes?: number;
       /** Brave-specific configuration (used when provider="brave"). */
       brave?: {
+        /** Base URL for the Brave Search API (default: https://api.search.brave.com/res/v1). */
+        baseUrl?: string;
         /** Brave Search mode: "web" (standard results) or "llm-context" (pre-extracted page content). Default: "web". */
         mode?: "web" | "llm-context";
       };

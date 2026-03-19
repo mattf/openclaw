@@ -23,6 +23,7 @@ const {
   resolveKimiBaseUrl,
   extractKimiCitations,
   resolveBraveMode,
+  resolveBraveBaseUrl,
   mapBraveLlmContextResults,
 } = __testing;
 
@@ -466,5 +467,23 @@ describe("mapBraveLlmContextResults", () => {
       },
     });
     expect(results[0].siteName).toBeUndefined();
+  });
+});
+
+describe("resolveBraveBaseUrl", () => {
+  it("uses config baseUrl when provided", () => {
+    expect(resolveBraveBaseUrl({ baseUrl: "https://custom.example.com/v1" })).toBe(
+      "https://custom.example.com/v1",
+    );
+  });
+
+  it("trims whitespace and trailing slashes from baseUrl", () => {
+    expect(resolveBraveBaseUrl({ baseUrl: "  https://custom.example.com/v1///  " })).toBe(
+      "https://custom.example.com/v1",
+    );
+  });
+
+  it("falls back to default baseUrl when not configured", () => {
+    expect(resolveBraveBaseUrl({})).toBe("https://api.search.brave.com/res/v1");
   });
 });
