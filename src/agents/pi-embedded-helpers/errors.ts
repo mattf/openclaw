@@ -109,6 +109,9 @@ export function isContextOverflowError(errorMessage?: string): boolean {
     // Anthropic API and OpenAI-compatible providers (e.g. ZhipuAI/GLM) return this stop reason
     // when the context window is exceeded. pi-ai surfaces it as "Unhandled stop reason: model_context_window_exceeded".
     lower.includes("context_window_exceeded") ||
+    // OpenAI-compatible providers return this when input + output exceeds the model limit.
+    // e.g. "the model's context length is only 128000 tokens, resulting in a maximum input length of 127999 tokens"
+    lower.includes("context length is only") ||
     // Chinese proxy error messages for context overflow
     errorMessage.includes("上下文过长") ||
     errorMessage.includes("上下文超出") ||
