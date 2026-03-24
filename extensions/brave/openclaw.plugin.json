@@ -13,6 +13,10 @@
     "webSearch.mode": {
       "label": "Brave Search Mode",
       "help": "Brave Search mode: web or llm-context."
+    },
+    "webSearch.baseUrl": {
+      "label": "Brave Search Base URL",
+      "help": "Base URL for the Brave Search API (default: https://api.search.brave.com/res/v1)."
     }
   },
   "configSchema": {
@@ -29,6 +33,9 @@
           "mode": {
             "type": "string",
             "enum": ["web", "llm-context"]
+          },
+          "baseUrl": {
+            "type": "string"
           }
         }
       }
