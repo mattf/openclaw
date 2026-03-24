@@ -329,6 +329,18 @@ describe("isContextOverflowError", () => {
     }
   });
 
+  it("matches OpenAI-compatible 'context length is only' overflow errors", () => {
+    // e.g. returned as HTTP 400 when input tokens equal the model's context window
+    const samples = [
+      "You passed 128000 input tokens and requested 1 output tokens. However, the model's context length is only 128000 tokens, resulting in a maximum input length of 127999 tokens. Please reduce the length of the input prompt. (parameter=input_tokens, value=128000)",
+      "the model's context length is only 32000 tokens",
+      '{"error":{"message":"You passed 128000 input tokens and requested 1 output tokens. However, the model\'s context length is only 128000 tokens, resulting in a maximum input length of 127999 tokens.","type":"BadRequestError","param":"input_tokens","code":400}}',
+    ];
+    for (const sample of samples) {
+      expect(isContextOverflowError(sample)).toBe(true);
+    }
+  });
+
   it("matches model_context_window_exceeded stop reason surfaced by pi-ai", () => {
     // Anthropic API (and some OpenAI-compatible providers like ZhipuAI/GLM) return
     // stop_reason: "model_context_window_exceeded" when the context window is hit.
