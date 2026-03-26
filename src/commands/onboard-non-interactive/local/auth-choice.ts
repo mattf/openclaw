@@ -1,4 +1,5 @@
 import type { ApiKeyCredential } from "../../../agents/auth-profiles/types.js";
+import { discoverOpenAICompatibleLocalModels } from "../../../agents/openai-compat-discovery.js";
 import type { OpenClawConfig } from "../../../config/config.js";
 import type { SecretInput } from "../../../config/types.secrets.js";
 import { applyAuthProfileConfig } from "../../../plugins/provider-auth-helpers.js";
@@ -290,6 +291,46 @@ export async function applyNonInteractiveAuthChoice(params: {
           customApiKeyInput = resolvedCustomApiKey.key;
         }
       }
+
+      if (customAuth.modelId === undefined) {
+        // Discovery path: openai compat with no --custom-model-id supplied
+        const resolvedApiKeyString = resolvedCustomApiKey?.key ?? "";
+        const discovered = await discoverOpenAICompatibleLocalModels({
+          baseUrl: customAuth.baseUrl,
+          apiKey: resolvedApiKeyString || undefined,
+          label: "custom",
+        });
+        if (discovered.length === 0) {
+          runtime.error(
+            [
+              "No models discovered from the custom provider endpoint.",
+              "Use --custom-model-id to specify a model ID explicitly.",
+            ].join("\n"),
+          );
+          runtime.exit(1);
+          return null;
+        }
+        // Add models in reverse order so the first discovered model becomes the primary
+        let config = nextConfig;
+        for (const model of [...discovered].toReversed()) {
+          const discResult = applyCustomApiConfig({
+            config,
+            baseUrl: customAuth.baseUrl,
+            modelId: model.id,
+            compatibility: customAuth.compatibility,
+            apiKey: customApiKeyInput,
+            providerId: customAuth.providerId,
+          });
+          if (discResult.providerIdRenamedFrom && discResult.providerId) {
+            runtime.log(
+              `Custom provider ID "${discResult.providerIdRenamedFrom}" already exists for a different base URL. Using "${discResult.providerId}".`,
+            );
+          }
+          config = discResult.config;
+        }
+        return config;
+      }
+
       const result = applyCustomApiConfig({
         config: nextConfig,
         baseUrl: customAuth.baseUrl,

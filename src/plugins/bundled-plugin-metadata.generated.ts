@@ -276,6 +276,9 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
                 type: "string",
                 enum: ["web", "llm-context"],
               },
+              baseUrl: {
+                type: "string",
+              },
             },
           },
         },
@@ -293,6 +296,10 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
         "webSearch.mode": {
           label: "Brave Search Mode",
           help: "Brave Search mode: web or llm-context.",
+        },
+        "webSearch.baseUrl": {
+          label: "Brave Search Base URL",
+          help: "Base URL for the Brave Search API (default: https://api.search.brave.com/res/v1).",
         },
       },
     },
