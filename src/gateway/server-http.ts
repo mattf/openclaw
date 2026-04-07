@@ -35,6 +35,7 @@ import {
   type ControlUiRootState,
 } from "./control-ui.js";
 import { handleOpenAiEmbeddingsHttpRequest } from "./embeddings-http.js";
+import { handleWorkspaceBrowseRequest } from "./workspace-browse-http.js";
 import { applyHookMappings } from "./hooks-mapping.js";
 import {
   extractHookToken,
@@ -81,6 +82,7 @@ import type { GatewayWsClient } from "./server/ws-types.js";
 import { handleSessionKillHttpRequest } from "./session-kill-http.js";
 import { handleSessionHistoryHttpRequest } from "./sessions-history-http.js";
 import { handleToolsInvokeHttpRequest } from "./tools-invoke-http.js";
+import { resolveWorkspaceRoot } from "../agents/workspace-dir.js";
 
 type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
 
@@ -949,6 +951,21 @@ export function createGatewayHttpServer(opts: {
               resolveAvatar: (agentId) =>
                 resolveAgentAvatar(configSnapshot, agentId, { includeUiOverride: true }),
             }),
+        });
+        requestStages.push({
+          name: "workspace-browse",
+          run: () => {
+            const workspaceDir =
+              configSnapshot.agents?.defaults?.workspace ?? resolveWorkspaceRoot();
+            return handleWorkspaceBrowseRequest(req, res, {
+              basePath: controlUiBasePath,
+              workspaceDir,
+              resolvedAuth,
+              trustedProxies,
+              allowRealIpFallback,
+              rateLimiter,
+            });
+          },
         });
         requestStages.push({
           name: "control-ui-http",
