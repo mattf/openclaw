@@ -238,6 +238,54 @@ RUN --mount=type=cache,id=openclaw-bookworm-apt-cache,target=/var/cache/apt,shar
         docker-ce-cli docker-compose-plugin; \
     fi
 
+# Install signal-cli (native Linux build) for Signal channel support.
+# Adds ~97 MB. Enables channels.signal.autoStart=true (the default) out of the box.
+# Update OPENCLAW_SIGNAL_CLI_VERSION to pin a newer release.
+ARG OPENCLAW_SIGNAL_CLI_VERSION="0.14.1"
+RUN curl -fsSL \
+      "https://github.com/AsamK/signal-cli/releases/download/v${OPENCLAW_SIGNAL_CLI_VERSION}/signal-cli-${OPENCLAW_SIGNAL_CLI_VERSION}-Linux-native.tar.gz" \
+      -o /tmp/signal-cli.tar.gz && \
+    tar xf /tmp/signal-cli.tar.gz -C /usr/local/bin && \
+    chmod 755 /usr/local/bin/signal-cli && \
+    rm -f /tmp/signal-cli.tar.gz && \
+    signal-cli --version
+
+# Install GitHub CLI from the official apt repository.
+# The signing key fingerprint is pinned for supply-chain security.
+# Update OPENCLAW_GH_GPG_FINGERPRINT when GitHub rotates release keys.
+ARG OPENCLAW_GH_GPG_FINGERPRINT="2C6106201985B60E6C7AC87323F3D4EA75716059"
+RUN --mount=type=cache,id=openclaw-bookworm-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=openclaw-bookworm-apt-lists,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      ca-certificates curl gnupg && \
+    install -m 0755 -d /etc/apt/keyrings && \
+    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /tmp/gh.gpg && \
+    expected_fingerprint="$(printf '%s' "$OPENCLAW_GH_GPG_FINGERPRINT" | tr '[:lower:]' '[:upper:]' | tr -d '[:space:]')" && \
+    actual_fingerprint="$(gpg --batch --show-keys --with-colons /tmp/gh.gpg | awk -F: '$1 == "fpr" { print toupper($10); exit }')" && \
+    if [ -z "$actual_fingerprint" ] || [ "$actual_fingerprint" != "$expected_fingerprint" ]; then \
+      echo "ERROR: GitHub CLI apt key fingerprint mismatch (expected $expected_fingerprint, got ${actual_fingerprint:-<empty>})" >&2; \
+      exit 1; \
+    fi && \
+    cp /tmp/gh.gpg /etc/apt/keyrings/githubcli-archive-keyring.gpg && \
+    rm -f /tmp/gh.gpg && \
+    chmod a+r /etc/apt/keyrings/githubcli-archive-keyring.gpg && \
+    printf 'deb [arch=%s signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main\n' \
+      "$(dpkg --print-architecture)" > /etc/apt/sources.list.d/github-cli.list && \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gh
+
+# Install uv (Astral Python package manager) to /usr/local/bin.
+# The retry loop mirrors the Bun installation pattern used in the build stage.
+RUN for attempt in 1 2 3 4 5; do \
+      if curl --retry 5 --retry-all-errors --retry-delay 2 -fsSL https://astral.sh/uv/install.sh | \
+           UV_INSTALL_DIR=/usr/local/bin sh; then \
+        break; \
+      fi; \
+      if [ "$attempt" -eq 5 ]; then exit 1; fi; \
+      sleep $((attempt * 2)); \
+    done
+
 # Expose the CLI binary without requiring npm global writes as non-root.
 RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw \
  && chmod 755 /app/openclaw.mjs
