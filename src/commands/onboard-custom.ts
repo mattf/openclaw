@@ -1,6 +1,7 @@
 import { CONTEXT_WINDOW_HARD_MIN_TOKENS } from "../agents/context-window-guard.js";
 import { DEFAULT_PROVIDER } from "../agents/defaults.js";
 import { buildModelAliasIndex, modelKey } from "../agents/model-selection.js";
+import { discoverOpenAICompatibleLocalModels } from "../agents/openai-compat-discovery.js";
 import type { ModelProviderConfig } from "../config/types.models.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { isSecretRef, type SecretInput } from "../config/types.secrets.js";
@@ -135,7 +136,8 @@ export type ParseNonInteractiveCustomApiFlagsParams = {
 
 export type ParsedNonInteractiveCustomApiFlags = {
   baseUrl: string;
-  modelId: string;
+  /** undefined when compatibility is "openai" and no --custom-model-id was given (discovery path) */
+  modelId: string | undefined;
   compatibility: CustomApiCompatibility;
   apiKey?: string;
   providerId?: string;
@@ -496,6 +498,44 @@ async function promptCustomApiModelId(prompter: WizardPrompter): Promise<string>
   ).trim();
 }
 
+async function promptDiscoverOrEnterModelId(
+  prompter: WizardPrompter,
+  baseUrl: string,
+  resolvedApiKey: string,
+): Promise<string> {
+  const spinner = prompter.progress("Discovering available models...");
+  let discovered: { id: string }[] = [];
+  try {
+    discovered = await discoverOpenAICompatibleLocalModels({
+      baseUrl,
+      apiKey: resolvedApiKey || undefined,
+      label: "custom",
+    });
+  } catch {
+    // fall through to manual entry
+  }
+  spinner.stop(
+    discovered.length > 0
+      ? `Discovered ${discovered.length} model${discovered.length !== 1 ? "s" : ""}.`
+      : "Could not discover models.",
+  );
+  if (discovered.length === 0) {
+    return promptCustomApiModelId(prompter);
+  }
+  const MANUAL_ENTRY = "__manual__";
+  const choice = await prompter.select({
+    message: "Select a model",
+    options: [
+      ...discovered.map((m) => ({ value: m.id, label: m.id })),
+      { value: MANUAL_ENTRY, label: "Enter model ID manually..." },
+    ],
+  });
+  if (choice === MANUAL_ENTRY) {
+    return promptCustomApiModelId(prompter);
+  }
+  return choice;
+}
+
 async function applyCustomApiRetryChoice(params: {
   prompter: WizardPrompter;
   config: OpenClawConfig;
@@ -575,7 +615,8 @@ export function parseNonInteractiveCustomApiFlags(
 ): ParsedNonInteractiveCustomApiFlags {
   const baseUrl = normalizeOptionalString(params.baseUrl) ?? "";
   const modelId = normalizeOptionalString(params.modelId) ?? "";
-  if (!baseUrl || !modelId) {
+  const compatibility = parseCustomApiCompatibility(params.compatibility);
+  if (!baseUrl || (!modelId && compatibility !== "openai")) {
     throw new CustomApiError(
       "missing_required",
       [
@@ -595,8 +636,8 @@ export function parseNonInteractiveCustomApiFlags(
   }
   return {
     baseUrl,
-    modelId,
-    compatibility: parseCustomApiCompatibility(params.compatibility),
+    modelId: modelId || undefined,
+    compatibility,
     ...(apiKey ? { apiKey } : {}),
     ...(providerId ? { providerId } : {}),
   };
@@ -793,7 +834,10 @@ export async function promptCustomApiConfig(params: {
     })),
   });
 
-  let modelId = await promptCustomApiModelId(prompter);
+  let modelId =
+    compatibilityChoice === "openai"
+      ? await promptDiscoverOrEnterModelId(prompter, baseUrl, resolvedApiKey)
+      : await promptCustomApiModelId(prompter);
 
   let compatibility: CustomApiCompatibility | null =
     compatibilityChoice === "unknown" ? null : compatibilityChoice;
