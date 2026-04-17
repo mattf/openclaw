@@ -30,6 +30,7 @@ import {
 } from "./auth.js";
 import { normalizeCanvasScopedUrl } from "./canvas-capability.js";
 import type { ControlUiRootState } from "./control-ui.js";
+import { handleWorkspaceBrowseRequest } from "./workspace-browse-http.js";
 import { applyHookMappings } from "./hooks-mapping.js";
 import {
   extractHookToken,
@@ -71,6 +72,7 @@ import {
 import type { PreauthConnectionBudget } from "./server/preauth-connection-budget.js";
 import type { ReadinessChecker } from "./server/readiness.js";
 import type { GatewayWsClient } from "./server/ws-types.js";
+import { resolveWorkspaceRoot } from "../agents/workspace-dir.js";
 
 type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
 
@@ -1098,6 +1100,21 @@ export function createGatewayHttpServer(opts: {
               basePath: controlUiBasePath,
               resolveAvatar: (agentId) =>
                 resolveAgentAvatar(configSnapshot, agentId, { includeUiOverride: true }),
+            });
+          },
+        });
+        requestStages.push({
+          name: "workspace-browse",
+          run: () => {
+            const workspaceDir =
+              configSnapshot.agents?.defaults?.workspace ?? resolveWorkspaceRoot();
+            return handleWorkspaceBrowseRequest(req, res, {
+              basePath: controlUiBasePath,
+              workspaceDir,
+              resolvedAuth,
+              trustedProxies,
+              allowRealIpFallback,
+              rateLimiter,
             });
           },
         });
