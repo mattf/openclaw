@@ -9,6 +9,7 @@ import {
   mapBraveLlmContextResults,
   normalizeBraveCountry,
   normalizeBraveLanguageParams,
+  resolveBraveBaseUrl,
   resolveBraveConfig,
   resolveBraveMode,
 } from "./brave-web-search-provider.shared.js";
@@ -148,6 +149,7 @@ export function createBraveWebSearchProvider(): WebSearchProviderPlugin {
 export const __testing = {
   normalizeBraveCountry,
   normalizeBraveLanguageParams,
+  resolveBraveBaseUrl,
   resolveBraveMode,
   mapBraveLlmContextResults,
 } as const;
