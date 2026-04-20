@@ -421,6 +421,33 @@ describe("handleWorkspaceBrowseRequest", () => {
       });
     });
 
+    it("strips Origin: null before auth so trusted-proxy form POSTs are not blocked", async () => {
+      await withWorkspace(async (ws) => {
+        const boundary = "test-boundary-null-origin";
+        const body = buildMultipartBody(boundary, "upload.txt", Buffer.from("ok"));
+        const { res, setHeader, end } = makeMockHttpResponse();
+        const req = Object.assign(Readable.from([body]), {
+          url: "/workspace/",
+          method: "POST",
+          headers: {
+            "content-type": `multipart/form-data; boundary=${boundary}`,
+            "origin": "null", // browser sends literal "null" with Referrer-Policy: no-referrer
+          },
+        }) as unknown as IncomingMessage;
+        const handled = await handleWorkspaceBrowseRequest(req, res, {
+          basePath: "",
+          workspaceDir: ws,
+          resolvedAuth: noAuth,
+          trustedProxies: [],
+          allowRealIpFallback: false,
+        });
+        expect(handled).toBe(true);
+        expect(res.statusCode).toBe(303);
+        void setHeader;
+        void end;
+      });
+    });
+
     it("authenticates upload via ?token= query param when no Authorization header", async () => {
       await withWorkspace(async (ws) => {
         // Simulate token auth: resolvedAuth mode "token", token matches

@@ -62,6 +62,17 @@ export async function handleWorkspaceBrowseRequest(
     req.headers["authorization"] = `Bearer ${queryToken}`;
   }
 
+  // Browsers send `Origin: null` (opaque origin) on form POST navigations when
+  // the page's Referrer-Policy is `no-referrer` (set by setDefaultSecurityHeaders).
+  // `checkBrowserOrigin` treats the literal string "null" as an invalid origin
+  // and would block the request. Strip it so it is treated as absent — which
+  // passes through in trusted-proxy mode (origin check only fires for non-empty
+  // origins) and is safe because the proxy has already verified the user identity
+  // via X-Forwarded-User before the request reaches openclaw.
+  if (req.headers["origin"] === "null") {
+    delete req.headers["origin"];
+  }
+
   // Auth
   const requestAuth = await authorizeGatewayHttpRequestOrReply({
     req,
