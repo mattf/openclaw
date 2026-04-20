@@ -6,7 +6,7 @@ import type { AuthRateLimiter } from "./auth-rate-limit.js";
 import type { ResolvedGatewayAuth } from "./auth.js";
 import { normalizeControlUiBasePath } from "./control-ui-shared.js";
 import { respondNotFound, respondPlainText } from "./control-ui-http-utils.js";
-import { authorizeGatewayHttpRequestOrReply } from "./http-utils.js";
+import { authorizeGatewayHttpRequestOrReply, getBearerToken } from "./http-utils.js";
 import { openBoundaryFileSync } from "../infra/boundary-file-read.js";
 
 export const WORKSPACE_BROWSE_PREFIX = "/workspace";
@@ -49,6 +49,17 @@ export async function handleWorkspaceBrowseRequest(
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.end("Method Not Allowed");
     return true;
+  }
+
+  // A plain HTML form POST cannot set custom headers, so the browser won't
+  // send an Authorization: Bearer header. To support form-based uploads we
+  // accept a ?token= query parameter and inject it as a Bearer header before
+  // the auth check runs. This is safe: the token is only ever embedded in
+  // the page by the server after a successful GET (auth already passed then),
+  // and the connection is HTTPS in production.
+  const queryToken = url.searchParams.get("token");
+  if (queryToken && !req.headers["authorization"]) {
+    req.headers["authorization"] = `Bearer ${queryToken}`;
   }
 
   // Auth
@@ -148,7 +159,8 @@ export async function handleWorkspaceBrowseRequest(
     if (method === "POST") {
       return handleFileUpload(req, res, realAbsPath, decodedSubPath, browsePrefix, realWorkspaceDir);
     }
-    return serveDirectoryListing(req, res, realAbsPath, decodedSubPath, browsePrefix);
+    const bearerToken = getBearerToken(req);
+    return serveDirectoryListing(req, res, realAbsPath, decodedSubPath, browsePrefix, bearerToken);
   }
 
   if (stat.isFile()) {
@@ -218,6 +230,7 @@ function serveDirectoryListing(
   realAbsDir: string,
   decodedSubPath: string,
   browsePrefix: string,
+  bearerToken?: string,
 ): boolean {
   let entries: fs.Dirent[];
   try {
@@ -388,7 +401,13 @@ ${fileRows}
 </body>
 </html>`;
 
-  const body = Buffer.from(html, "utf-8");
+  const uploadAction = bearerToken ? `?token=${encodeURIComponent(bearerToken)}` : "";
+  const htmlWithAction = html.replace(
+    'method="POST" enctype="multipart/form-data"',
+    `method="POST" enctype="multipart/form-data"${uploadAction ? ` action="${h(uploadAction)}"` : ""}`,
+  );
+
+  const body = Buffer.from(htmlWithAction, "utf-8");
 
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
