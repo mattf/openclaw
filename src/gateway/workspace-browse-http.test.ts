@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import type { IncomingMessage } from "node:http";
 import os from "node:os";
 import path from "node:path";
+import { Readable } from "node:stream";
 import { describe, expect, it } from "vitest";
 import type { ResolvedGatewayAuth } from "./auth.js";
 import { makeMockHttpResponse } from "./test-http-response.js";
@@ -12,7 +13,7 @@ import {
 
 const noAuth: ResolvedGatewayAuth = { mode: "none", allowTailscale: false };
 
-function makeReq(url: string, method: "GET" | "HEAD" | "POST" = "GET"): IncomingMessage {
+function makeReq(url: string, method: "GET" | "HEAD" | "POST" | "DELETE" | "PUT" = "GET"): IncomingMessage {
   return { url, method, headers: {} } as IncomingMessage;
 }
 
@@ -250,9 +251,17 @@ describe("handleWorkspaceBrowseRequest", () => {
   });
 
   describe("method restriction", () => {
-    it("returns 405 for POST to workspace path", async () => {
+    it("returns 405 for DELETE to workspace path", async () => {
       await withWorkspace(async (ws) => {
-        const { res, handled } = await call("/workspace/", ws, { method: "POST" });
+        const { res, handled } = await call("/workspace/", ws, { method: "DELETE" });
+        expect(handled).toBe(true);
+        expect(res.statusCode).toBe(405);
+      });
+    });
+
+    it("returns 405 for PUT to workspace path", async () => {
+      await withWorkspace(async (ws) => {
+        const { res, handled } = await call("/workspace/", ws, { method: "PUT" });
         expect(handled).toBe(true);
         expect(res.statusCode).toBe(405);
       });
@@ -262,6 +271,185 @@ describe("handleWorkspaceBrowseRequest", () => {
   describe("WORKSPACE_BROWSE_PREFIX export", () => {
     it("is /workspace", () => {
       expect(WORKSPACE_BROWSE_PREFIX).toBe("/workspace");
+    });
+  });
+
+  describe("file upload", () => {
+    function buildMultipartBody(boundary: string, filename: string, content: Buffer): Buffer {
+      return Buffer.concat([
+        Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: application/octet-stream\r\n\r\n`,
+        ),
+        content,
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]);
+    }
+
+    function makeUploadReq(url: string, filename: string, content: Buffer | string): IncomingMessage {
+      const boundary = "test-boundary-abc123";
+      const contentBuf = Buffer.isBuffer(content) ? content : Buffer.from(content);
+      const body = buildMultipartBody(boundary, filename, contentBuf);
+      const readable = Readable.from([body]);
+      return Object.assign(readable, {
+        url,
+        method: "POST",
+        headers: {
+          "content-type": `multipart/form-data; boundary=${boundary}`,
+        },
+      }) as unknown as IncomingMessage;
+    }
+
+    async function callUpload(
+      url: string,
+      workspaceDir: string,
+      filename: string,
+      content: Buffer | string,
+      opts: { basePath?: string } = {},
+    ) {
+      const { res, setHeader, end } = makeMockHttpResponse();
+      const req = makeUploadReq(url, filename, content);
+      const handled = await handleWorkspaceBrowseRequest(req, res, {
+        basePath: opts.basePath ?? "",
+        workspaceDir,
+        resolvedAuth: noAuth,
+        trustedProxies: [],
+        allowRealIpFallback: false,
+      });
+      return { res, setHeader, end, handled };
+    }
+
+    it("uploads a file to the workspace root and redirects", async () => {
+      await withWorkspace(async (ws) => {
+        const { res, handled } = await callUpload("/workspace/", ws, "hello.txt", "world");
+        expect(handled).toBe(true);
+        expect(res.statusCode).toBe(303);
+        const destContent = await fs.readFile(path.join(ws, "hello.txt"), "utf-8");
+        expect(destContent).toBe("world");
+      });
+    });
+
+    it("redirects back to the source directory after upload", async () => {
+      await withWorkspace(async (ws) => {
+        await fs.mkdir(path.join(ws, "sub"), { recursive: true });
+        const { res, setHeader } = await callUpload("/workspace/sub/", ws, "data.txt", "x");
+        expect(res.statusCode).toBe(303);
+        expect(setHeader).toHaveBeenCalledWith("Location", "/workspace/sub/");
+        const destContent = await fs.readFile(path.join(ws, "sub", "data.txt"), "utf-8");
+        expect(destContent).toBe("x");
+      });
+    });
+
+    it("overwrites an existing file", async () => {
+      await withWorkspace(async (ws) => {
+        await fs.writeFile(path.join(ws, "file.txt"), "old");
+        await callUpload("/workspace/", ws, "file.txt", "new");
+        const destContent = await fs.readFile(path.join(ws, "file.txt"), "utf-8");
+        expect(destContent).toBe("new");
+      });
+    });
+
+    it("returns 400 when POST targets a file path", async () => {
+      await withWorkspace(async (ws) => {
+        await fs.writeFile(path.join(ws, "existing.txt"), "data");
+        const { res, handled } = await callUpload("/workspace/existing.txt", ws, "other.txt", "x");
+        expect(handled).toBe(true);
+        expect(res.statusCode).toBe(400);
+      });
+    });
+
+    it("returns 400 when Content-Type is not multipart/form-data", async () => {
+      await withWorkspace(async (ws) => {
+        const { res, setHeader, end } = makeMockHttpResponse();
+        const req = Object.assign(Readable.from([Buffer.from("body")]), {
+          url: "/workspace/",
+          method: "POST",
+          headers: { "content-type": "application/json" },
+        }) as unknown as IncomingMessage;
+        const handled = await handleWorkspaceBrowseRequest(req, res, {
+          basePath: "",
+          workspaceDir: ws,
+          resolvedAuth: noAuth,
+          trustedProxies: [],
+          allowRealIpFallback: false,
+        });
+        expect(handled).toBe(true);
+        expect(res.statusCode).toBe(400);
+        void setHeader;
+        void end;
+      });
+    });
+
+    it("returns 400 when no file field is present in the multipart body", async () => {
+      await withWorkspace(async (ws) => {
+        const boundary = "test-boundary-nofile";
+        const body = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="other"\r\n\r\nvalue\r\n--${boundary}--\r\n`);
+        const { res, setHeader, end } = makeMockHttpResponse();
+        const req = Object.assign(Readable.from([body]), {
+          url: "/workspace/",
+          method: "POST",
+          headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+        }) as unknown as IncomingMessage;
+        const handled = await handleWorkspaceBrowseRequest(req, res, {
+          basePath: "",
+          workspaceDir: ws,
+          resolvedAuth: noAuth,
+          trustedProxies: [],
+          allowRealIpFallback: false,
+        });
+        expect(handled).toBe(true);
+        expect(res.statusCode).toBe(400);
+        void setHeader;
+        void end;
+      });
+    });
+
+    it("strips path traversal from filename and saves safely", async () => {
+      await withWorkspace(async (ws) => {
+        // filename "../evil.txt" should be sanitized to "evil.txt"
+        const { res } = await callUpload("/workspace/", ws, "../evil.txt", "payload");
+        expect(res.statusCode).toBe(303);
+        // File must exist inside the workspace, not outside
+        const destContent = await fs.readFile(path.join(ws, "evil.txt"), "utf-8");
+        expect(destContent).toBe("payload");
+      });
+    });
+
+    it("returns 400 for a filename that is only path separators (empty base)", async () => {
+      await withWorkspace(async (ws) => {
+        const { res } = await callUpload("/workspace/", ws, "../", "payload");
+        expect(res.statusCode).toBe(400);
+      });
+    });
+
+    it("returns 413 when file exceeds 50 MB", async () => {
+      await withWorkspace(async (ws) => {
+        // Build a body that exceeds 50 MB by constructing a large multipart payload
+        const boundary = "test-boundary-large";
+        const FIFTY_MB_PLUS_ONE = 50 * 1024 * 1024 + 1;
+        const largeChunk = Buffer.alloc(FIFTY_MB_PLUS_ONE, 0x41); // fill with 'A'
+        const body = Buffer.concat([
+          Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="big.bin"\r\nContent-Type: application/octet-stream\r\n\r\n`),
+          largeChunk,
+          Buffer.from(`\r\n--${boundary}--\r\n`),
+        ]);
+        const { res, setHeader, end } = makeMockHttpResponse();
+        const req = Object.assign(Readable.from([body]), {
+          url: "/workspace/",
+          method: "POST",
+          headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+        }) as unknown as IncomingMessage;
+        const handled = await handleWorkspaceBrowseRequest(req, res, {
+          basePath: "",
+          workspaceDir: ws,
+          resolvedAuth: noAuth,
+          trustedProxies: [],
+          allowRealIpFallback: false,
+        });
+        expect(handled).toBe(true);
+        expect(res.statusCode).toBe(413);
+        void setHeader;
+        void end;
+      });
     });
   });
 });

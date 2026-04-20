@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
+import busboy from "busboy";
 import type { AuthRateLimiter } from "./auth-rate-limit.js";
 import type { ResolvedGatewayAuth } from "./auth.js";
 import { normalizeControlUiBasePath } from "./control-ui-shared.js";
@@ -42,9 +43,9 @@ export async function handleWorkspaceBrowseRequest(
 
   // Method check
   const method = (req.method ?? "GET").toUpperCase();
-  if (method !== "GET" && method !== "HEAD") {
+  if (method !== "GET" && method !== "HEAD" && method !== "POST") {
     res.statusCode = 405;
-    res.setHeader("Allow", "GET, HEAD");
+    res.setHeader("Allow", "GET, HEAD, POST");
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.end("Method Not Allowed");
     return true;
@@ -144,10 +145,17 @@ export async function handleWorkspaceBrowseRequest(
       res.end();
       return true;
     }
+    if (method === "POST") {
+      return handleFileUpload(req, res, realAbsPath, decodedSubPath, browsePrefix, realWorkspaceDir);
+    }
     return serveDirectoryListing(req, res, realAbsPath, decodedSubPath, browsePrefix);
   }
 
   if (stat.isFile()) {
+    if (method === "POST") {
+      respondPlainText(res, 400, "Bad Request: cannot upload to a file path");
+      return true;
+    }
     return serveWorkspaceFile(req, res, realAbsPath, realWorkspaceDir);
   }
 
@@ -337,6 +345,26 @@ a:hover { text-decoration: underline; }
   .col-size, .col-mtime { display: none; }
   .col-name { width: 100%; }
 }
+.upload-form {
+  padding: 16px 24px;
+  border-top: 1px solid #21262d;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.upload-form label { font-size: 13px; color: #8b949e; }
+.upload-form input[type="file"] { font-size: 13px; color: #c9d1d9; }
+.upload-form button {
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #c9d1d9;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 5px 16px;
+}
+.upload-form button:hover { background: #30363d; }
 </style>
 </head>
 <body>
@@ -352,6 +380,11 @@ ${dirRows}
 ${fileRows}
 </tbody>
 </table>
+<form method="POST" enctype="multipart/form-data" class="upload-form">
+  <label for="upload-input">Upload file:</label>
+  <input id="upload-input" type="file" name="file">
+  <button type="submit">Upload</button>
+</form>
 </body>
 </html>`;
 
@@ -373,6 +406,160 @@ ${fileRows}
   res.setHeader("Content-Length", body.length);
   res.end(body);
   return true;
+}
+
+async function handleFileUpload(
+  req: IncomingMessage,
+  res: ServerResponse,
+  realAbsDir: string,
+  decodedSubPath: string,
+  browsePrefix: string,
+  realWorkspaceDir: string,
+): Promise<boolean> {
+  const contentType = req.headers["content-type"] ?? "";
+  if (!contentType.startsWith("multipart/form-data")) {
+    respondPlainText(res, 400, "Bad Request: expected multipart/form-data");
+    return true;
+  }
+
+  type UploadResult =
+    | { ok: true; destPath: string; tempPath: string }
+    | { ok: false; status: number; message: string };
+
+  const result = await new Promise<UploadResult>((resolve) => {
+    let settled = false;
+    let tempPath: string | null = null;
+    let destPath: string | null = null;
+    let fileReceived = false;
+    let fileWritePromise: Promise<void> = Promise.resolve();
+    let fileSizeExceeded = false;
+
+    const settle = (r: UploadResult) => {
+      if (settled) return;
+      settled = true;
+      if (!r.ok && tempPath) {
+        try {
+          fs.unlinkSync(tempPath);
+        } catch {}
+      }
+      resolve(r);
+    };
+
+    let bb: ReturnType<typeof busboy>;
+    try {
+      bb = busboy({ headers: req.headers, limits: { files: 1, fileSize: WORKSPACE_MAX_FILE_BYTES } });
+    } catch {
+      settle({ ok: false, status: 400, message: "Bad Request: malformed multipart headers" });
+      return;
+    }
+
+    bb.on("file", (_fieldname, file, info) => {
+      fileReceived = true;
+      const sanitized = sanitizeUploadFilename(info.filename ?? "");
+      if (!sanitized) {
+        file.resume();
+        settle({ ok: false, status: 400, message: "Bad Request: invalid filename" });
+        return;
+      }
+
+      const dest = path.join(realAbsDir, sanitized);
+      if (!dest.startsWith(realWorkspaceDir + path.sep)) {
+        file.resume();
+        settle({ ok: false, status: 403, message: "Forbidden" });
+        return;
+      }
+      destPath = dest;
+
+      const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      tempPath = path.join(realAbsDir, `.${sanitized}.tmp-${suffix}`);
+      const ws = fs.createWriteStream(tempPath);
+
+      file.on("limit", () => {
+        fileSizeExceeded = true;
+      });
+
+      fileWritePromise = new Promise<void>((writeResolve, writeReject) => {
+        ws.on("finish", writeResolve);
+        ws.on("error", writeReject);
+      });
+
+      file.pipe(ws);
+    });
+
+    bb.on("finish", async () => {
+      if (!fileReceived) {
+        settle({ ok: false, status: 400, message: "Bad Request: no file field" });
+        return;
+      }
+      if (settled) return;
+
+      try {
+        await fileWritePromise;
+      } catch {
+        settle({ ok: false, status: 500, message: "Internal Server Error" });
+        return;
+      }
+
+      if (fileSizeExceeded) {
+        if (tempPath) {
+          try {
+            fs.unlinkSync(tempPath);
+          } catch {}
+          tempPath = null;
+        }
+        settle({ ok: false, status: 413, message: "File too large" });
+        return;
+      }
+
+      if (!destPath || !tempPath) {
+        settle({ ok: false, status: 400, message: "Bad Request: no file field" });
+        return;
+      }
+
+      settle({ ok: true, destPath, tempPath });
+    });
+
+    bb.on("error", () => {
+      settle({ ok: false, status: 400, message: "Bad Request: malformed multipart data" });
+    });
+
+    req.pipe(bb);
+  });
+
+  if (!result.ok) {
+    respondPlainText(res, result.status, result.message);
+    return true;
+  }
+
+  try {
+    fs.renameSync(result.tempPath, result.destPath);
+  } catch {
+    try {
+      fs.unlinkSync(result.tempPath);
+    } catch {}
+    respondPlainText(res, 500, "Internal Server Error");
+    return true;
+  }
+
+  const parts = decodedSubPath ? decodedSubPath.split("/").filter(Boolean) : [];
+  const redirectTo =
+    parts.length > 0
+      ? `${browsePrefix}/${parts.map(encodeURIComponent).join("/")}/`
+      : `${browsePrefix}/`;
+  res.statusCode = 303;
+  res.setHeader("Location", redirectTo);
+  res.end();
+  return true;
+}
+
+/** Return the safe base name for an uploaded filename, or null if invalid. */
+function sanitizeUploadFilename(raw: string): string | null {
+  // Strip null bytes and normalise Windows-style backslashes to forward slashes
+  const cleaned = raw.replace(/\0/g, "").replace(/\\/g, "/");
+  // Use only the base name component — strips any path traversal (e.g. "../evil")
+  const base = path.basename(cleaned);
+  if (!base || base === "." || base === "..") return null;
+  return base;
 }
 
 function contentTypeForPath(filePath: string): string {
