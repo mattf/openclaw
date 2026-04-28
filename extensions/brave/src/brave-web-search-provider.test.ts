@@ -190,4 +190,20 @@ describe("brave web search provider", () => {
     const requestUrl = new URL(String(mockFetch.mock.calls[0]?.[0]));
     expect(requestUrl.searchParams.get("country")).toBe("ALL");
   });
+
+  it("resolveBraveBaseUrl uses config baseUrl when provided", () => {
+    expect(__testing.resolveBraveBaseUrl({ baseUrl: "https://custom.example.com/v1" })).toBe(
+      "https://custom.example.com/v1",
+    );
+  });
+
+  it("resolveBraveBaseUrl trims whitespace and trailing slashes from baseUrl", () => {
+    expect(__testing.resolveBraveBaseUrl({ baseUrl: "  https://custom.example.com/v1///  " })).toBe(
+      "https://custom.example.com/v1",
+    );
+  });
+
+  it("resolveBraveBaseUrl falls back to default baseUrl when not configured", () => {
+    expect(__testing.resolveBraveBaseUrl({})).toBe("https://api.search.brave.com/res/v1");
+  });
 });

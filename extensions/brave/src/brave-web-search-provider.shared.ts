@@ -6,7 +6,15 @@ import { Type } from "typebox";
 
 export type BraveConfig = {
   mode?: string;
+  baseUrl?: string;
 };
+
+const BRAVE_DEFAULT_BASE_URL = "https://api.search.brave.com/res/v1";
+
+export function resolveBraveBaseUrl(cfg?: BraveConfig): string {
+  const v = cfg?.baseUrl;
+  return v?.trim().replace(/\/+$/, "") || BRAVE_DEFAULT_BASE_URL;
+}
 
 export type BraveLlmContextResult = { url: string; title: string; snippets: string[] };
 export type BraveLlmContextResponse = {

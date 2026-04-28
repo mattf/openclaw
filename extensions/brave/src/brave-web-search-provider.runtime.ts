@@ -23,12 +23,12 @@ import {
   mapBraveLlmContextResults,
   normalizeBraveCountry,
   normalizeBraveLanguageParams,
+  resolveBraveBaseUrl,
   resolveBraveConfig,
   resolveBraveMode,
 } from "./brave-web-search-provider.shared.js";
 
-const BRAVE_SEARCH_ENDPOINT = "https://api.search.brave.com/res/v1/web/search";
-const BRAVE_LLM_CONTEXT_ENDPOINT = "https://api.search.brave.com/res/v1/llm/context";
+
 
 type BraveSearchResult = {
   title?: string;
@@ -62,6 +62,7 @@ async function runBraveLlmContextSearch(params: {
   query: string;
   apiKey: string;
   timeoutSeconds: number;
+  baseUrl: string;
   country?: string;
   search_lang?: string;
   freshness?: string;
@@ -74,7 +75,7 @@ async function runBraveLlmContextSearch(params: {
   }>;
   sources?: BraveLlmContextResponse["sources"];
 }> {
-  const url = new URL(BRAVE_LLM_CONTEXT_ENDPOINT);
+  const url = new URL(`${params.baseUrl}/llm/context`);
   url.searchParams.set("q", params.query);
   if (params.country) {
     url.searchParams.set("country", params.country);
@@ -117,6 +118,7 @@ async function runBraveWebSearch(params: {
   count: number;
   apiKey: string;
   timeoutSeconds: number;
+  baseUrl: string;
   country?: string;
   search_lang?: string;
   ui_lang?: string;
@@ -124,7 +126,7 @@ async function runBraveWebSearch(params: {
   dateAfter?: string;
   dateBefore?: string;
 }): Promise<Array<Record<string, unknown>>> {
-  const url = new URL(BRAVE_SEARCH_ENDPOINT);
+  const url = new URL(`${params.baseUrl}/web/search`);
   url.searchParams.set("q", params.query);
   url.searchParams.set("count", String(params.count));
   if (params.country) {
@@ -198,6 +200,7 @@ export async function executeBraveSearch(
 
   const braveConfig = resolveBraveConfig(searchConfig);
   const braveMode = resolveBraveMode(braveConfig);
+  const braveBaseUrl = resolveBraveBaseUrl(braveConfig);
   const query = readStringParam(args, "query", { required: true });
   const count =
     readNumberParam(args, "count", { integer: true }) ?? searchConfig?.maxResults ?? undefined;
@@ -286,6 +289,7 @@ export async function executeBraveSearch(
   const cacheKey = buildSearchCacheKey([
     "brave",
     braveMode,
+    braveBaseUrl,
     query,
     resolveSearchCount(count, DEFAULT_SEARCH_COUNT),
     country,
@@ -309,6 +313,7 @@ export async function executeBraveSearch(
       query,
       apiKey,
       timeoutSeconds,
+      baseUrl: braveBaseUrl,
       country: country ?? undefined,
       search_lang: normalizedLanguage.search_lang,
       freshness,
@@ -342,6 +347,7 @@ export async function executeBraveSearch(
     count: resolveSearchCount(count, DEFAULT_SEARCH_COUNT),
     apiKey,
     timeoutSeconds,
+    baseUrl: braveBaseUrl,
     country: country ?? undefined,
     search_lang: normalizedLanguage.search_lang,
     ui_lang: normalizedLanguage.ui_lang,
