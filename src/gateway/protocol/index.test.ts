@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { TALK_TEST_PROVIDER_ID } from "../../test-utils/talk-test-provider.js";
 import {
   formatValidationErrors,
+  validateModelsListParams,
   validateTalkConfigResult,
   validateTalkRealtimeSessionParams,
   validateWakeParams,
@@ -173,5 +174,28 @@ describe("validateWakeParams", () => {
         anotherExtra: true,
       }),
     ).toBe(true);
+  });
+});
+
+describe("validateModelsListParams", () => {
+  it("accepts an empty params object", () => {
+    expect(validateModelsListParams({})).toBe(true);
+  });
+
+  it("accepts view: default", () => {
+    expect(validateModelsListParams({ view: "default" })).toBe(true);
+  });
+
+  it("accepts view: authenticated", () => {
+    expect(validateModelsListParams({ view: "authenticated" })).toBe(true);
+  });
+
+  it("rejects unknown view values", () => {
+    expect(validateModelsListParams({ view: "all" })).toBe(false);
+    expect(validateModelsListParams({ view: "configured" })).toBe(false);
+  });
+
+  it("rejects additional properties", () => {
+    expect(validateModelsListParams({ view: "default", provider: "openai" })).toBe(false);
   });
 });
