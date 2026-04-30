@@ -46,10 +46,8 @@ export const modelsHandlers: GatewayRequestHandlers = {
       const view = (params as { view?: string } | undefined)?.view ?? "default";
       if (view === "authenticated") {
         const filtered = buildProviderFilteredCatalog(catalog, cfg);
-        if (filtered.length > 0) {
-          respond(true, { models: filtered }, undefined);
-          return;
-        }
+        respond(true, { models: filtered }, undefined);
+        return;
       }
       const { allowedCatalog } = buildAllowedModelSet({
         cfg,
