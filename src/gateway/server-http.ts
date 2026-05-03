@@ -31,6 +31,7 @@ import {
 } from "./auth.js";
 import { normalizeCanvasScopedUrl } from "./canvas-capability.js";
 import type { ControlUiRootState } from "./control-ui.js";
+import { handleWorkspaceBrowseRequest } from "./workspace-browse-http.js";
 import type { AuthorizedGatewayHttpRequest } from "./http-auth-utils.js";
 import { sendGatewayAuthFailure, setDefaultSecurityHeaders } from "./http-common.js";
 import { resolveRequestClientIp } from "./net.js";
@@ -43,6 +44,7 @@ import {
 import type { PreauthConnectionBudget } from "./server/preauth-connection-budget.js";
 import type { ReadinessChecker } from "./server/readiness.js";
 import type { GatewayWsClient } from "./server/ws-types.js";
+import { resolveWorkspaceRoot } from "../agents/workspace-dir.js";
 import { VOICECLAW_REALTIME_PATH } from "./voiceclaw-realtime/paths.js";
 
 type PluginHttpRequestHandler = (
@@ -766,6 +768,21 @@ export function createGatewayHttpServer(opts: {
               rateLimiter,
               resolveAvatar: (agentId) =>
                 resolveAgentAvatar(configSnapshot, agentId, { includeUiOverride: true }),
+            });
+          },
+        });
+        requestStages.push({
+          name: "workspace-browse",
+          run: () => {
+            const workspaceDir =
+              configSnapshot.agents?.defaults?.workspace ?? resolveWorkspaceRoot();
+            return handleWorkspaceBrowseRequest(req, res, {
+              basePath: controlUiBasePath,
+              workspaceDir,
+              resolvedAuth,
+              trustedProxies,
+              allowRealIpFallback,
+              rateLimiter,
             });
           },
         });
