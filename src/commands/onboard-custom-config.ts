@@ -186,7 +186,8 @@ export type ParseNonInteractiveCustomApiFlagsParams = {
 
 export type ParsedNonInteractiveCustomApiFlags = {
   baseUrl: string;
-  modelId: string;
+  /** undefined when compatibility is "openai" and no --custom-model-id was given (discovery path) */
+  modelId: string | undefined;
   compatibility: CustomApiCompatibility;
   apiKey?: string;
   providerId?: string;
@@ -478,7 +479,8 @@ export function parseNonInteractiveCustomApiFlags(
 ): ParsedNonInteractiveCustomApiFlags {
   const baseUrl = normalizeOptionalString(params.baseUrl) ?? "";
   const modelId = normalizeOptionalString(params.modelId) ?? "";
-  if (!baseUrl || !modelId) {
+  const compatibility = parseCustomApiCompatibility(params.compatibility);
+  if (!baseUrl || (!modelId && compatibility !== "openai")) {
     throw new CustomApiError(
       "missing_required",
       [
@@ -498,8 +500,8 @@ export function parseNonInteractiveCustomApiFlags(
   }
   return {
     baseUrl,
-    modelId,
-    compatibility: parseCustomApiCompatibility(params.compatibility),
+    modelId: modelId || undefined,
+    compatibility,
     ...(apiKey ? { apiKey } : {}),
     ...(providerId ? { providerId } : {}),
     ...(params.supportsImageInput === undefined
