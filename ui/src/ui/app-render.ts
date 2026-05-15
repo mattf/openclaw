@@ -1467,6 +1467,12 @@ export function renderApp(state: AppViewState) {
             </div>
             <div class="sidebar-shell__footer">
               <div class="sidebar-utility-group">
+                <a class="nav-item sidebar-utility-link" href="${basePath}/workspace/">
+                  <span class="nav-item__icon" aria-hidden="true">${icons.folder}</span>
+                  ${!navCollapsed
+                    ? html` <span class="nav-item__text">${t("common.files")}</span> `
+                    : nothing}
+                </a>
                 <a
                   class="nav-item nav-item--external sidebar-utility-link"
                   href="https://docs.openclaw.ai"

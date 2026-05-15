@@ -861,6 +861,7 @@ export async function startGatewayServer(
       getHookClientIpConfig: () => runtimeState?.hookClientIpConfig ?? initialHookClientIpConfig,
       pluginRegistry,
       pinChannelRegistry: !minimalTestGateway,
+      workspaceDir: defaultWorkspaceDir,
       deps,
       canvasRuntime,
       canvasHostEnabled,

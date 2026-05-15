@@ -92,16 +92,23 @@ export function shouldClearUnboundScopesForMissingDeviceIdentity(params: {
   authMethod: string | undefined;
   trustedProxyAuthOk?: boolean;
 }): boolean {
+  // If the decision was rejected, always clear scopes.
+  if (params.decision.kind !== "allow") return true;
+
+  // If bypass or local-insecure-preservation is active, scopes are kept.
+  if (params.controlUiAuthPolicy.allowBypass) return false;
+  if (params.preserveInsecureLocalControlUiScopes) return false;
+
+  // If trusted-proxy auth fully succeeded (the proxy vouched for the operator),
+  // preserve scopes — the operator was authenticated by the trusted proxy.
+  if (params.trustedProxyAuthOk && params.authMethod === "trusted-proxy") return false;
+
+  // All other missing-device identities with shared auth methods need clearing.
   return (
-    params.decision.kind !== "allow" ||
-    (!params.controlUiAuthPolicy.allowBypass &&
-      !params.preserveInsecureLocalControlUiScopes &&
-      // trusted-proxy auth can bypass pairing for some clients, but those
-      // self-declared scopes are still unbound without device identity.
-      (params.authMethod === "token" ||
-        params.authMethod === "password" ||
-        params.authMethod === "trusted-proxy" ||
-        params.trustedProxyAuthOk === true))
+    params.authMethod === "token" ||
+    params.authMethod === "password" ||
+    params.authMethod === "trusted-proxy" ||
+    params.trustedProxyAuthOk === true
   );
 }
 

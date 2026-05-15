@@ -33,6 +33,8 @@ export {
   type GatewayHttpRequestAuthCheckResult,
 } from "./http-auth-utils.js";
 
+export { sendMethodNotAllowed, sendNotFound, sendServerError } from "./http-common.js";
+
 export const OPENCLAW_MODEL_ID = "openclaw";
 export const OPENCLAW_DEFAULT_MODEL_ID = "openclaw/default";
 

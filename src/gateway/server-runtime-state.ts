@@ -74,6 +74,7 @@ export async function createGatewayRuntimeState(params: {
   getHookClientIpConfig: () => HookClientIpConfig;
   pluginRegistry: PluginRegistry;
   pinChannelRegistry?: boolean;
+  workspaceDir?: string;
   deps: CliDeps;
   canvasRuntime: RuntimeEnv;
   canvasHostEnabled: boolean;
@@ -234,6 +235,7 @@ export async function createGatewayRuntimeState(params: {
         getResolvedAuth: params.getResolvedAuth,
         rateLimiter: params.rateLimiter,
         getReadiness: params.getReadiness,
+        workspaceDir: params.workspaceDir,
         tlsOptions: params.gatewayTls?.enabled ? params.gatewayTls.tlsOptions : undefined,
       });
       // Attach upgrade handler BEFORE listening to prevent race condition

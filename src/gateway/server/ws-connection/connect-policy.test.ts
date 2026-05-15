@@ -409,5 +409,16 @@ describe("ws connect policy", () => {
         authMethod: undefined,
       }),
     ).toBe(true);
+
+    // Trusted-proxy auth succeeded via trusted proxy — scopes must be preserved.
+    expect(
+      shouldClearUnboundScopesForMissingDeviceIdentity({
+        decision: { kind: "allow" },
+        controlUiAuthPolicy: nonControlUi,
+        preserveInsecureLocalControlUiScopes: false,
+        authMethod: "trusted-proxy",
+        trustedProxyAuthOk: true,
+      }),
+    ).toBe(false);
   });
 });

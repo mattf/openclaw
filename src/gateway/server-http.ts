@@ -490,6 +490,8 @@ export function createGatewayHttpServer(opts: {
   /** Optional rate limiter for auth brute-force protection. */
   rateLimiter?: AuthRateLimiter;
   getReadiness?: ReadinessChecker;
+  /** Optional workspace directory for the /workspace/ file browser. */
+  workspaceDir?: string;
   getRuntimeConfig?: () => OpenClawConfig;
   tlsOptions?: TlsOptions;
 }): HttpServer {
@@ -510,6 +512,7 @@ export function createGatewayHttpServer(opts: {
     resolvedAuth,
     rateLimiter,
     getReadiness,
+    workspaceDir,
   } = opts;
   const getResolvedAuth = opts.getResolvedAuth ?? (() => resolvedAuth);
   const loadGatewayConfig = opts.getRuntimeConfig ?? getRuntimeConfig;
@@ -742,6 +745,28 @@ export function createGatewayHttpServer(opts: {
                 rateLimiter,
               },
             ),
+        });
+      }
+
+      let loadedWorkspaceBrowseModulePromise:
+        | Promise<typeof import("./workspace-browse-http.js")>
+        | undefined;
+      function getWorkspaceBrowseModule() {
+        loadedWorkspaceBrowseModulePromise ??= import("./workspace-browse-http.js");
+        return loadedWorkspaceBrowseModulePromise;
+      }
+
+      if (workspaceDir) {
+        requestStages.push({
+          name: "workspace-browse",
+          run: async () =>
+            (await getWorkspaceBrowseModule()).handleWorkspaceBrowseHttpRequest(req, res, {
+              auth: resolvedAuth,
+              trustedProxies: trustedProxies,
+              allowRealIpFallback,
+              rateLimiter,
+              workspaceDir,
+            }),
         });
       }
 
