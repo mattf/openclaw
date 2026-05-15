@@ -155,6 +155,7 @@ function renderHtml(
   entries: FileEntry[],
   workspaceRoot: string,
   basePath: string,
+  currentDir: string,
   error?: string,
 ): string {
   const escape = htmlEscape;
@@ -172,14 +173,16 @@ function renderHtml(
 
   return `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><title>Files — OpenClaw</title>
+<head><meta charset="utf-8"><title>Files - OpenClaw</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#f7f8fa;color:#1e1e1e;padding:24px}
-header h1{font-size:1.25rem;font-weight:600;margin-bottom:24px}
+header h1{font-size:1.25rem;font-weight:600;margin-bottom:16px}
 a{color:#0969da;text-decoration:none}
 a:hover{text-decoration:underline}
-.breadcrumb{font-size:.875rem;margin-bottom:16px;color:#57606a}
+.breadcrumb{font-size:.875rem;margin-bottom:8px;color:#57606a}
+.upload-section{margin-bottom:16px}
+.upload-section input[type="file"]{font-size:.875rem}
 table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 th,td{padding:10px 14px;text-align:left;border-bottom:1px solid #e1e4e8;font-size:.875rem}
 th{background:#f6f8fa;font-weight:600}
@@ -189,7 +192,13 @@ tr:hover{background:#f6f8fa}
 <body>
 <header><h1>Files</h1></header>
 <div class="breadcrumb">${escape(pathName)}</div>
-${error ? `<div style="color:#cf222e;margin-bottom:16px">${escape(error)}</div>` : ""}
+<div class="upload-section">
+<form method="post" enctype="multipart/form-data" action="${escape(pathName)}">
+  <label>Upload to this directory: <input type="file" name="file"></label><br>
+  <button type="submit">Upload</button>
+</form>
+</div>
+${error ? '<div style="color:#cf222e;margin-bottom:16px">' + escape(error) + "</div>" : ""}
 <table><thead><tr><th>Name</th><th>Size</th><th>Modified</th><th>Type</th></tr></thead><tbody>
 ${entries.length ? rows : '<tr><td colspan="4" class="empty">No files found.</td></tr>'}
 </tbody></table>
@@ -388,6 +397,6 @@ export async function handleWorkspaceBrowseHttpRequest(
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   res.statusCode = 200;
-  res.end(renderHtml(url.pathname, result.entries, workspaceRoot, basePath));
+  res.end(renderHtml(url.pathname, result.entries, workspaceRoot, basePath, relativePath));
   return true;
 }
