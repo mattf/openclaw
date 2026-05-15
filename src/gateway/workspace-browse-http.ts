@@ -1,8 +1,6 @@
 import fs from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
-// @ts-expect-error busboy has no type declarations
-import Busboy from "busboy";
 import { z } from "zod";
 import {
   sendJson,
@@ -198,56 +196,55 @@ ${entries.length ? rows : '<tr><td colspan="4" class="empty">No files found.</td
 </body></html>`;
 }
 
+async function collectBody(req: IncomingMessage): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
 async function handleUpload(
   req: IncomingMessage,
   res: ServerResponse,
   workspaceRoot: string,
   fullPath: string,
 ): Promise<boolean> {
-  if (req.method !== "POST") {
-    sendMethodNotAllowed(res);
+  try {
+    const body = await collectBody(req);
+    if (body.length === 0) {
+      sendNotFound(res);
+      return true;
+    }
+
+    // Get filename from Content-Disposition header or default to "upload"
+    const cd = (req.headers["content-disposition"] || "") as string;
+    const filenameMatch = cd.match(/filename\*=(?:UTF-8'')?["']?([^"';]+)["']?/i);
+    const filename = filenameMatch?.[1] || "upload";
+    const safeFilename = filename
+      .replace(/[\x00]/g, "")
+      .replace(/[/\\]/g, "_")
+      .slice(0, 255);
+
+    const savePath = path.resolve(
+      workspaceRoot,
+      fullPath.replace(/^\//, ""),
+      encodeURIComponent(safeFilename),
+    );
+
+    // Ensure save path is within workspace root
+    if (!savePath.startsWith(workspaceRoot + path.sep) && savePath !== workspaceRoot) {
+      sendNotFound(res);
+      return true;
+    }
+
+    await fs.promises.writeFile(savePath, body);
+    sendJson(res, 200, { ok: true, path: fullPath } as UploadResponse);
+    return true;
+  } catch {
+    sendServerError(res, "Upload failed");
     return true;
   }
-  let savePath: string | null = null;
-  let saved = false;
-  const busboyObj: unknown = new Busboy({ headers: req.headers });
-  const busboyTyped = busboyObj as {
-    on(event: string, cb: (...args: unknown[]) => void): void;
-    pipe: (source: unknown) => void;
-  };
-  const _reqRaw = req as unknown as { pipe: (sink: unknown) => void };
-  busboyTyped.on("file", (fieldname: unknown, fileObj: unknown, infoObj: unknown) => {
-    if (fieldname !== "file") return;
-    const info = infoObj as { filename: string };
-    const file = fileObj as { pipe: (dest: unknown) => void; resume: () => void };
-    if (savePath) {
-      file.resume();
-      return;
-    }
-    savePath = `${workspaceRoot}${fullPath.replace(/^\//, "")}/${encodeURIComponent(info.filename)}`;
-    const ws = fs.createWriteStream(savePath);
-    file.pipe(ws);
-    ws.on("finish", () => {
-      saved = true;
-    });
-    ws.on("error", () => {
-      saved = false;
-      sendServerError(res, "Upload failed");
-    });
-  });
-  busboyTyped.on("finish", () => {
-    if (!savePath) {
-      sendNotFound(res);
-      return;
-    }
-    if (!saved) {
-      sendServerError(res, "Upload failed");
-      return;
-    }
-    sendJson(res, 200, { ok: true, path: fullPath } as UploadResponse);
-  });
-  _reqRaw.pipe(busboyObj);
-  return true;
 }
 
 export async function handleWorkspaceBrowseHttpRequest(
