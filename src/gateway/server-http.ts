@@ -15,6 +15,7 @@ import {
   runWithDiagnosticTraceContext,
 } from "../infra/diagnostic-trace-context.js";
 import { resolveAssistantIdentity } from "./assistant-identity.js";
+import { resolveWorkspaceRoot } from "../agents/workspace-dir.js";
 import type { AuthRateLimiter } from "./auth-rate-limit.js";
 import {
   authorizeHttpGatewayConnect,
@@ -25,6 +26,7 @@ import {
 import type { ControlUiRootState } from "./control-ui.js";
 import type { AuthorizedGatewayHttpRequest } from "./http-auth-utils.js";
 import { sendGatewayAuthFailure, setDefaultSecurityHeaders } from "./http-common.js";
+import { handleWorkspaceBrowseRequest } from "./workspace-browse-http.js";
 import { resolveRequestClientIp } from "./net.js";
 import {
   normalizePluginNodeCapabilityScopedUrl,
@@ -763,6 +765,21 @@ export function createGatewayHttpServer(opts: {
               rateLimiter,
               resolveAvatar: (agentId) =>
                 resolveAgentAvatar(configSnapshot, agentId, { includeUiOverride: true }),
+            });
+          },
+        });
+        requestStages.push({
+          name: "workspace-browse",
+          run: () => {
+            const workspaceDir =
+              configSnapshot.agents?.defaults?.workspace ?? resolveWorkspaceRoot();
+            return handleWorkspaceBrowseRequest(req, res, {
+              basePath: controlUiBasePath,
+              workspaceDir,
+              resolvedAuth,
+              trustedProxies,
+              allowRealIpFallback,
+              rateLimiter,
             });
           },
         });

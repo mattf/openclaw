@@ -2313,6 +2313,7 @@ export type OpenClawPluginDefinition = {
   securityAuditCollectors?: OpenClawPluginSecurityAuditCollector[];
   register?: (api: OpenClawPluginApi) => void;
   activate?: (api: OpenClawPluginApi) => void;
+  manifestModelCatalog?: () => Promise<{ entries: ModelCatalogEntry[] }>;
 };
 
 export type OpenClawPluginModule = OpenClawPluginDefinition | ((api: OpenClawPluginApi) => void);

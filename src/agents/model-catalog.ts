@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getRuntimeConfig } from "../config/config.js";
@@ -177,6 +178,116 @@ export function loadManifestModelCatalog(params: {
     }
     return entry;
   });
+}
+
+async function loadManifestModelCatalogHooks(
+  params: {
+    config: OpenClawConfig;
+    workspaceDir?: string;
+    env?: NodeJS.ProcessEnv;
+    fallbackToMetadataScan?: boolean;
+  },
+  models: ModelCatalogEntry[],
+): Promise<ModelCatalogEntry[]> {
+  const snapshot = getCurrentPluginMetadataSnapshot({
+    config: params.config,
+    env: params.env,
+    ...(params.workspaceDir !== undefined ? { workspaceDir: params.workspaceDir } : {}),
+    ...(params.workspaceDir === undefined ? { allowWorkspaceScopedSnapshot: true } : {}),
+  });
+  const resolvedSnapshot =
+    snapshot ??
+    (params.fallbackToMetadataScan === false
+      ? undefined
+      : loadPluginMetadataSnapshot({
+          config: params.config,
+          ...(params.workspaceDir !== undefined ? { workspaceDir: params.workspaceDir } : {}),
+          env: params.env ?? process.env,
+        }));
+  if (!resolvedSnapshot) {
+    return [];
+  }
+
+  const allPluginIds = resolvedSnapshot.plugins.map((p) => p.id);
+  if (allPluginIds.length === 0) {
+    return [];
+  }
+
+  const results: ModelCatalogEntry[] = [];
+  for (const plugin of resolvedSnapshot.plugins) {
+    if (!plugin.source || !plugin.rootDir) {
+      continue;
+    }
+    try {
+      const hookResults = await invokePluginManifestModelCatalog(plugin);
+      for (const row of hookResults) {
+        const entry: ModelCatalogEntry = {
+          id: row.id,
+          name: row.name,
+          provider: row.provider,
+        };
+        if (typeof row.contextWindow === "number") {
+          entry.contextWindow = row.contextWindow;
+        }
+        if (typeof row.reasoning === "boolean") {
+          entry.reasoning = row.reasoning;
+        }
+        if (Array.isArray(row.input) && row.input.length > 0) {
+          const validInput: ModelInputType[] = row.input.filter(
+            (v): v is ModelInputType =>
+              ["text", "image", "audio", "video", "document"].includes(v),
+          );
+          if (validInput.length > 0) {
+            entry.input = validInput;
+          }
+        }
+        results.push(entry);
+      }
+    } catch {
+      // Fail soft: manifest catalog hooks are convenience, not hard requirements.
+    }
+  }
+  appendCatalogEntriesIfAbsent(models, results);
+  return results;
+}
+
+async function invokePluginManifestModelCatalog(
+  plugin: { id: string; source: string; rootDir: string },
+): Promise<{ id: string; name: string; provider: string; contextWindow?: number; reasoning?: boolean; input?: string[] }[]> {
+  let sourcePath: string;
+
+  if (typeof plugin.source === "string" && existsSync(plugin.source)) {
+    sourcePath = plugin.source;
+  } else {
+    sourcePath = plugin.source;
+    if (sourcePath.endsWith(".ts")) {
+      const jsPath = sourcePath.slice(0, -3) + ".js";
+      if (existsSync(jsPath)) {
+        sourcePath = jsPath;
+      } else if (existsSync(sourcePath)) {
+        // keep .ts path for jiti
+      } else {
+        return [];
+      }
+    } else if (!existsSync(sourcePath)) {
+      return [];
+    }
+  }
+
+  const mod = await import(sourcePath);
+  const entry = mod.default ?? mod;
+  if (!entry || typeof entry !== "object") {
+    return [];
+  }
+  const hook = (entry as Record<string, unknown>).manifestModelCatalog;
+  if (typeof hook !== "function") {
+    return [];
+  }
+  const result = (await hook.call(entry)) as { entries?: Array<{ id: string; name: string; provider: string; contextWindow?: number; reasoning?: boolean; input?: string[] }> };
+  if (!result?.entries) {
+    return [];
+  }
+  return result.entries;
 }
 
 function sortModelCatalogEntries(entries: ModelCatalogEntry[]): ModelCatalogEntry[] {
@@ -439,6 +550,15 @@ export async function loadModelCatalog(params?: {
         }
       }
       logStage("plugin-models-merged", `entries=${models.length}`);
+
+      // Invoke manifestModelCatalog hooks from provider plugins for runtime model discovery.
+      logStage("manifest-hooks-invoking");
+      await loadManifestModelCatalogHooks({
+        config: cfg,
+        env: process.env,
+        fallbackToMetadataScan: false,
+      }, models);
+      logStage("manifest-hooks-invoked", `entries=${models.length}`);
 
       const configuredModels = buildConfiguredModelCatalog({ cfg });
       if (configuredModels.length > 0) {
