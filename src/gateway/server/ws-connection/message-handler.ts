@@ -1054,7 +1054,7 @@ export function attachGatewayWsMessageHandler(params: GatewayWsMessageHandlerPar
               ...(bootstrapPairingRoles ? { roles: bootstrapPairingRoles } : {}),
               silent:
                 reason === "scope-upgrade"
-                  ? false
+                  ? allowSilentLocalPairing
                   : allowSilentLocalPairing ||
                     allowSilentBootstrapPairing ||
                     allowSilentTrustedCidrsNodePairing,
