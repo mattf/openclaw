@@ -1292,5 +1292,66 @@ describe("trusted-proxy auth", () => {
       expect(res.ok).toBe(false);
       expect(res.reason).toBe("trusted_proxy_no_proxies_configured");
     });
+
+    it("accepts local-direct request with matching localToken (CLI access)", async () => {
+      const res = await authorizeGatewayConnect({
+        auth: {
+          mode: "trusted-proxy",
+          allowTailscale: false,
+          trustedProxy: trustedProxyConfig,
+          localToken: "cli-secret",
+        },
+        connectAuth: { token: "cli-secret" },
+        trustedProxies: ["127.0.0.1"],
+        req: {
+          socket: { remoteAddress: "127.0.0.1" },
+          headers: { host: "localhost" },
+        } as never,
+      });
+
+      expect(res.ok).toBe(true);
+      expect(res.method).toBe("token");
+    });
+
+    it("rejects local-direct request with wrong localToken", async () => {
+      const res = await authorizeGatewayConnect({
+        auth: {
+          mode: "trusted-proxy",
+          allowTailscale: false,
+          trustedProxy: trustedProxyConfig,
+          localToken: "cli-secret",
+        },
+        connectAuth: { token: "wrong-secret" },
+        trustedProxies: ["127.0.0.1"],
+        req: {
+          socket: { remoteAddress: "127.0.0.1" },
+          headers: { host: "localhost" },
+        } as never,
+      });
+
+      expect(res.ok).toBe(false);
+      expect(res.reason).toBe("trusted_proxy_loopback_source");
+    });
+
+    it("rejects localToken from a non-local (non-loopback) remote address", async () => {
+      const res = await authorizeGatewayConnect({
+        auth: {
+          mode: "trusted-proxy",
+          allowTailscale: false,
+          trustedProxy: trustedProxyConfig,
+          localToken: "cli-secret",
+        },
+        connectAuth: { token: "cli-secret" },
+        trustedProxies: ["10.0.0.1"],
+        req: {
+          socket: { remoteAddress: "10.0.0.1" },
+          headers: { host: "gateway.local" },
+        } as never,
+      });
+
+      expect(res.ok).toBe(false);
+      // trusted-proxy auth fails before the localToken check (not a local-direct request)
+      expect(res.reason).toBe("trusted_proxy_missing_header_x-forwarded-proto");
+    });
   });
 });

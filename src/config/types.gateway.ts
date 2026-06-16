@@ -203,6 +203,13 @@ export type GatewayAuthConfig = {
    * Required when mode is "trusted-proxy".
    */
   trustedProxy?: GatewayTrustedProxyConfig;
+  /**
+   * A shared token accepted exclusively from loopback (same-host) connections
+   * with no forwarded headers. Allows the local openclaw CLI to authenticate
+   * against a gateway running in trusted-proxy mode without creating a network-
+   * accessible side door. Only meaningful when mode is "trusted-proxy".
+   */
+  localToken?: SecretInput;
 };
 
 export type GatewayAuthRateLimitConfig = {
