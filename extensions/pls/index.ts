@@ -28,7 +28,7 @@ export default definePluginEntry({
       provider: string;
       contextWindow?: number;
       reasoning?: boolean;
-      input?: string[];
+      input?: ("text" | "image" | "audio" | "video" | "document")[];
     }> = [];
     for (const [modelId, caps] of readPlsModelCapabilitiesCache()) {
       entries.push({
