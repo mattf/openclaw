@@ -43,9 +43,9 @@ import {
   resolveBraveMode,
 } from "./brave-web-search-provider.shared.js";
 
-const DEFAULT_BRAVE_BASE_URL = "https://api.search.brave.com";
-const BRAVE_SEARCH_ENDPOINT_PATH = "/res/v1/web/search";
-const BRAVE_LLM_CONTEXT_ENDPOINT_PATH = "/res/v1/llm/context";
+const DEFAULT_BRAVE_BASE_URL = "https://api.search.brave.com/res/v1";
+const BRAVE_SEARCH_ENDPOINT_PATH = "/web/search";
+const BRAVE_LLM_CONTEXT_ENDPOINT_PATH = "/llm/context";
 const braveHttpLogger = createSubsystemLogger("brave/http");
 type BraveEndpointMode = "selfHosted" | "strict";
 type BraveSearchMode = "llm-context" | "web";
