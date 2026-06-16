@@ -6,7 +6,11 @@ import {
 import { createProviderApiKeyAuthMethod } from "openclaw/plugin-sdk/provider-auth-api-key";
 import { DEFAULT_CONTEXT_TOKENS } from "openclaw/plugin-sdk/provider-model-shared";
 import { applyPlsConfig, PLS_DEFAULT_MODEL_REF } from "./onboard.js";
-import { getPlsModelCapabilities, loadPlsModelCapabilities } from "./pls-model-capabilities.js";
+import {
+  getPlsModelCapabilities,
+  loadPlsModelCapabilities,
+  readPlsModelCapabilitiesCache,
+} from "./pls-model-capabilities.js";
 import { buildPlsProvider, PLS_BASE_URL } from "./provider-catalog.js";
 
 const PROVIDER_ID = "pls";
@@ -16,6 +20,28 @@ export default definePluginEntry({
   id: "pls",
   name: "PLS Provider",
   description: "OpenClaw PLS (Private LLM Service) provider plugin",
+  manifestModelCatalog: async () => {
+    getPlsModelCapabilities("__ping__");
+    const entries: Array<{
+      id: string;
+      name: string;
+      provider: string;
+      contextWindow?: number;
+      reasoning?: boolean;
+      input?: string[];
+    }> = [];
+    for (const [modelId, caps] of readPlsModelCapabilitiesCache()) {
+      entries.push({
+        id: modelId,
+        name: modelId,
+        provider: PROVIDER_ID,
+        contextWindow: caps.contextWindow,
+        reasoning: caps.reasoning,
+        input: caps.input,
+      });
+    }
+    return { entries };
+  },
   register(api) {
     function buildDynamicPlsModel(ctx: ProviderResolveDynamicModelContext): ProviderRuntimeModel {
       const capabilities = getPlsModelCapabilities(ctx.modelId);

@@ -279,3 +279,27 @@ export function getPlsModelCapabilities(modelId: string): PlsModelCapabilities |
 
   return result;
 }
+
+/**
+ * Return a copy of the entire model capability cache.
+ * Used for manifest-level model catalog entries.
+ */
+export function readPlsModelCapabilitiesCache(): Map<string, PlsModelCapabilities> {
+  ensurePlsModelCache();
+  if (!cache) {
+    return new Map();
+  }
+  return new Map(cache);
+}
+
+/**
+ * Return a copy of the entire model capability cache.
+ * Used for manifest-level model catalog entries.
+ */
+export function readPlsModelCapabilitiesCache(): Map<string, PlsModelCapabilities> {
+  ensurePlsModelCache();
+  if (!cache) {
+    return new Map();
+  }
+  return new Map(cache);
+}

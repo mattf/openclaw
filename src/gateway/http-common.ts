@@ -44,6 +44,16 @@ export function sendMethodNotAllowed(res: ServerResponse, allow = "POST") {
   sendText(res, 405, "Method Not Allowed");
 }
 
+export function sendNotFound(res: ServerResponse) {
+  sendText(res, 404, "Not Found");
+}
+
+export function sendServerError(res: ServerResponse, message?: string) {
+  sendJson(res, 500, {
+    error: { message: message ?? "Internal Server Error", type: "internal_server_error" },
+  });
+}
+
 export function sendUnauthorized(res: ServerResponse) {
   sendJson(res, 401, {
     error: { message: "Unauthorized", type: "unauthorized" },
