@@ -1,0 +1,28 @@
+{
+  "id": "pls",
+  "enabledByDefault": true,
+  "providers": ["pls"],
+  "providerAuthEnvVars": {
+    "pls": ["PLS_API_KEY"]
+  },
+  "providerAuthChoices": [
+    {
+      "provider": "pls",
+      "method": "api-key",
+      "choiceId": "pls-api-key",
+      "choiceLabel": "PLS API key",
+      "groupId": "pls-api-key",
+      "groupLabel": "PLS (Private LLM Service)",
+      "groupHint": "API key",
+      "optionKey": "plsApiKey",
+      "cliFlag": "--pls-api-key",
+      "cliOption": "--pls-api-key <key>",
+      "cliDescription": "PLS API key"
+    }
+  ],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}
