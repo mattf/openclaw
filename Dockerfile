@@ -336,6 +336,18 @@ RUN for attempt in 1 2 3 4 5; do \
       sleep $((attempt * 2)); \
     done
 
+# Install signal-cli (native Linux build) for Signal channel support.
+# Adds ~97 MB. Enables channels.signal.autoStart=true (the default) out of the box.
+# Update OPENCLAW_SIGNAL_CLI_VERSION to pin a newer release.
+ARG OPENCLAW_SIGNAL_CLI_VERSION="0.14.1"
+RUN curl -fsSL \
+      "https://github.com/AsamK/signal-cli/releases/download/v${OPENCLAW_SIGNAL_CLI_VERSION}/signal-cli-${OPENCLAW_SIGNAL_CLI_VERSION}-Linux-native.tar.gz" \
+      -o /tmp/signal-cli.tar.gz && \
+    tar xf /tmp/signal-cli.tar.gz -C /usr/local/bin && \
+    chmod 755 /usr/local/bin/signal-cli && \
+    rm -f /tmp/signal-cli.tar.gz && \
+    signal-cli --version
+
 # Expose the CLI binary without requiring npm global writes as non-root.
 RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw \
  && chmod 755 /app/openclaw.mjs
