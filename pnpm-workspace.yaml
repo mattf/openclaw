@@ -3,6 +3,10 @@ packages:
   - ui
   - packages/*
   - extensions/*
+  - '!extensions/amazon-bedrock'
+  - '!extensions/amazon-bedrock-mantle'
+  - '!extensions/tlon'
+  - '!extensions/msteams'
 
 minimumReleaseAge: 2880
 
