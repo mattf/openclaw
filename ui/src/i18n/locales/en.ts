@@ -60,6 +60,7 @@ export const en: TranslationMap = {
     settingsSections: "Settings sections",
     version: "Version",
     docs: "Docs",
+    files: "Files",
     theme: "Theme",
     colorMode: "Color mode",
     resources: "Resources",

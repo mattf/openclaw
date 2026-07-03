@@ -2613,6 +2613,20 @@ export function renderApp(state: AppViewState) {
               <div class="sidebar-utility-group">
                 <a
                   class="nav-item nav-item--external sidebar-utility-link"
+                  href="${basePath}/workspace/"
+                  target=${EXTERNAL_LINK_TARGET}
+                  title="${t("common.files")} (opens in new tab)"
+                >
+                  <span class="nav-item__icon" aria-hidden="true">${icons.folder}</span>
+                  ${!navCollapsed
+                    ? html`
+                        <span class="nav-item__text">${t("common.files")}</span>
+                        <span class="nav-item__external-icon">${icons.externalLink}</span>
+                      `
+                    : nothing}
+                </a>
+                <a
+                  class="nav-item nav-item--external sidebar-utility-link"
                   href="https://docs.openclaw.ai"
                   target=${EXTERNAL_LINK_TARGET}
                   rel=${buildExternalLinkRel()}
