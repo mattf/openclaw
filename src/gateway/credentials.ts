@@ -306,6 +306,14 @@ export function resolveGatewayCredentialsFromConfig(params: {
   const localPasswordPrecedence = params.localPasswordPrecedence ?? "env-first";
 
   if (mode === "local") {
+    // Trusted-proxy mode: surface localToken as the CLI connect credential so the
+    // same-host CLI can authenticate without going through the proxy chain.
+    if (plan.authMode === "trusted-proxy") {
+      const rawLocalToken = params.cfg.gateway?.auth?.localToken;
+      const localTokenValue =
+        typeof rawLocalToken === "string" ? trimToUndefined(rawLocalToken) : undefined;
+      return { token: localTokenValue };
+    }
     return resolveLocalGatewayCredentials({
       plan,
       env,
