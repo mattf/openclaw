@@ -21,7 +21,7 @@ export type AuthChoice = BuiltInAuthChoice | (string & {});
 
 /** Auth choice groups are plugin-owned ids plus the core `custom` bucket. */
 export type AuthChoiceGroupId = "custom" | (string & {});
-export type GatewayAuthChoice = "token" | "password";
+export type GatewayAuthChoice = "token" | "password" | "trusted-proxy";
 export type ResetScope = "config" | "config+creds+sessions" | "full";
 export type GatewayBind = "loopback" | "lan" | "auto" | "custom" | "tailnet";
 export type TailscaleMode = "off" | "serve" | "funnel";
@@ -75,6 +75,11 @@ export type OnboardOptions = OnboardDynamicProviderOptions & {
   gatewayToken?: string;
   gatewayTokenRefEnv?: string;
   gatewayPassword?: string;
+  gatewayTrustedProxies?: string | string[];
+  gatewayTrustedProxyUserHeader?: string;
+  gatewayTrustedProxyRequiredHeaders?: string | string[];
+  gatewayTrustedProxyAllowUsers?: string | string[];
+  gatewayControlUiAllowedOrigins?: string | string[];
   tailscale?: TailscaleMode;
   tailscaleResetOnExit?: boolean;
   installDaemon?: boolean;

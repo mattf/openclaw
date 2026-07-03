@@ -1004,4 +1004,113 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
       expect((cfg.gateway?.auth?.token ?? "").length).toBeGreaterThan(8);
     });
   }, 60_000);
+
+  it("writes trusted-proxy auth config with required fields", async () => {
+    await withStateDir("state-trusted-proxy-", async (stateDir) => {
+      const workspace = path.join(stateDir, "openclaw");
+
+      await runNonInteractiveSetup(
+        {
+          nonInteractive: true,
+          mode: "local",
+          workspace,
+          authChoice: "skip",
+          skipSkills: true,
+          skipHealth: true,
+          installDaemon: false,
+          gatewayAuth: "trusted-proxy",
+          gatewayTrustedProxies: "10.0.0.1,10.0.0.2",
+          gatewayTrustedProxyUserHeader: "x-forwarded-user",
+        },
+        runtime,
+      );
+
+      const configPath = resolveStateConfigPath(process.env, stateDir);
+      const cfg = await readJsonFile<{
+        gateway?: {
+          auth?: {
+            mode?: string;
+            trustedProxy?: {
+              userHeader?: string;
+              requiredHeaders?: string[];
+              allowUsers?: string[];
+            };
+          };
+          trustedProxies?: string[];
+        };
+      }>(configPath);
+
+      expect(cfg.gateway?.auth?.mode).toBe("trusted-proxy");
+      expect(cfg.gateway?.auth?.trustedProxy?.userHeader).toBe("x-forwarded-user");
+      expect(cfg.gateway?.trustedProxies).toEqual(["10.0.0.1", "10.0.0.2"]);
+    });
+  }, 60_000);
+
+  it("writes trusted-proxy auth with allowUsers and requiredHeaders", async () => {
+    await withStateDir("state-trusted-proxy-full-", async (stateDir) => {
+      const workspace = path.join(stateDir, "openclaw");
+
+      await runNonInteractiveSetup(
+        {
+          nonInteractive: true,
+          mode: "local",
+          workspace,
+          authChoice: "skip",
+          skipSkills: true,
+          skipHealth: true,
+          installDaemon: false,
+          gatewayAuth: "trusted-proxy",
+          gatewayTrustedProxies: "10.0.0.1",
+          gatewayTrustedProxyUserHeader: "x-user",
+          gatewayTrustedProxyRequiredHeaders: "x-auth-token,x-request-id",
+          gatewayTrustedProxyAllowUsers: "alice,bob",
+        },
+        runtime,
+      );
+
+      const configPath = resolveStateConfigPath(process.env, stateDir);
+      const cfg = await readJsonFile<{
+        gateway?: {
+          auth?: {
+            mode?: string;
+            trustedProxy?: {
+              userHeader?: string;
+              requiredHeaders?: string[];
+              allowUsers?: string[];
+            };
+          };
+          trustedProxies?: string[];
+        };
+      }>(configPath);
+
+      expect(cfg.gateway?.auth?.mode).toBe("trusted-proxy");
+      expect(cfg.gateway?.auth?.trustedProxy?.requiredHeaders).toEqual([
+        "x-auth-token",
+        "x-request-id",
+      ]);
+      expect(cfg.gateway?.auth?.trustedProxy?.allowUsers).toEqual(["alice", "bob"]);
+    });
+  }, 60_000);
+
+  it("fails when trusted-proxy auth is selected without --gateway-trusted-proxies", async () => {
+    await withStateDir("state-trusted-proxy-missing-", async (stateDir) => {
+      const workspace = path.join(stateDir, "openclaw");
+
+      await expect(
+        runNonInteractiveSetup(
+          {
+            nonInteractive: true,
+            mode: "local",
+            workspace,
+            authChoice: "skip",
+            skipSkills: true,
+            skipHealth: true,
+            installDaemon: false,
+            gatewayAuth: "trusted-proxy",
+          },
+          runtime,
+        ),
+      ).rejects.toThrow();
+    });
+  }, 60_000);
 });
