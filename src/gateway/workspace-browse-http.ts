@@ -371,7 +371,7 @@ ${tableRows}</tbody>
   const body = Buffer.from(html, "utf-8");
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'");
+  res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Content-Length", body.length);
