@@ -5,8 +5,18 @@ import { matchRootFileOpenFailure, openRootFileSync } from "../infra/boundary-fi
 import type { AuthRateLimiter } from "./auth-rate-limit.js";
 import type { ResolvedGatewayAuth } from "./auth-resolve.js";
 import { authorizeGatewayHttpRequestOrReply, getBearerToken } from "./http-auth-utils.js";
-import { sendNotFound, sendServerError } from "./http-common.js";
+import { sendJson, sendText } from "./http-common.js";
 import { normalizeControlUiBasePath } from "./control-ui-shared.js";
+
+function sendNotFound(res: ServerResponse): void {
+  sendText(res, 404, "Not Found");
+}
+
+function sendServerError(res: ServerResponse, message?: string): void {
+  sendJson(res, 500, {
+    error: { message: message ?? "Internal Server Error", type: "internal_server_error" },
+  });
+}
 
 export const WORKSPACE_BROWSE_PREFIX = "/workspace";
 const WORKSPACE_MAX_FILE_BYTES = 50 * 1024 * 1024; // 50 MB
@@ -281,8 +291,8 @@ function serveDirectoryListing(
     tableRows += `<tr><td><a href="${h(fileUrl)}">${h(f.name)}</a></td><td>${size}</td><td>${mtime}</td></tr>\n`;
   }
 
-  const uploadAction = bearerToken
-    ? `?token=${encodeURIComponent(bearerToken)}`
+  const uploadTokenParam = bearerToken
+    ? `data-token="${h(bearerToken)}"`
     : "";
 
   const html = `<!DOCTYPE html>
@@ -298,10 +308,14 @@ table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
 th { text-align: left; border-bottom: 1px solid #30363d; padding: 0.3rem 1rem 0.3rem 0; color: #8b949e; }
 td { padding: 0.25rem 1rem 0.25rem 0; }
 nav { margin-bottom: 1rem; font-size: 0.9rem; }
-.upload-form { margin-top: 2rem; padding: 1rem; border: 1px solid #30363d; border-radius: 6px; display: flex; gap: 0.5rem; align-items: center; }
+.upload-form { margin-top: 2rem; padding: 1rem; border: 1px solid #30363d; border-radius: 6px; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .upload-form label { color: #8b949e; }
 .upload-form button { background: #238636; color: #fff; border: none; border-radius: 4px; padding: 0.3rem 0.8rem; cursor: pointer; }
 .upload-form button:hover { background: #2ea043; }
+.upload-form button:disabled { background: #484f58; cursor: not-allowed; }
+.upload-form .status { color: #8b949e; font-size: 0.9rem; }
+.upload-form .status.error { color: #f85149; }
+.upload-form .status.success { color: #3fb950; }
 </style>
 </head>
 <body>
@@ -311,10 +325,45 @@ nav { margin-bottom: 1rem; font-size: 0.9rem; }
 <tbody>
 ${tableRows}</tbody>
 </table>
-<form method="POST" enctype="multipart/form-data" class="upload-form" action="${h(uploadAction)}">
+<form class="upload-form" ${uploadTokenParam}>
   <label for="upload-input">Upload file:</label>
   <input id="upload-input" type="file" name="file">
   <button type="submit">Upload</button>
+  <span class="status"></span>
+  <script>
+(function() {
+  var form = document.currentScript.parentElement;
+  var status = form.querySelector('.status');
+  var btn = form.querySelector('button');
+  var input = document.getElementById('upload-input');
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    if (!input.files.length) return;
+    var fd = new FormData();
+    fd.append('file', input.files[0]);
+    var tok = form.dataset.token || '';
+    var url = location.pathname + (tok ? '?token=' + encodeURIComponent(tok) : '');
+    status.textContent = 'Uploading...';
+    status.className = 'status';
+    btn.disabled = true;
+    fetch(url, { method: 'POST', body: fd })
+      .then(function(r) {
+        if (r.redirected) {
+          location.href = r.url;
+        } else if (r.ok) {
+          location.reload();
+        } else {
+          throw new Error('HTTP ' + r.status);
+        }
+      })
+      .catch(function(er) {
+        status.textContent = 'Upload failed: ' + er.message;
+        status.className = 'status error';
+        btn.disabled = false;
+      });
+  });
+})();
+  </script>
 </form>
 </body>
 </html>`;
@@ -322,7 +371,7 @@ ${tableRows}</tbody>
   const body = Buffer.from(html, "utf-8");
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'");
+  res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Content-Length", body.length);
