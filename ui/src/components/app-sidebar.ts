@@ -1705,6 +1705,19 @@ class AppSidebar extends LitElement {
                 </a>
               </openclaw-tooltip>
               <openclaw-tooltip
+                .content=${t("common.filesOpensInNewTab", { label: t("common.files") })}
+              >
+                <a
+                  class="sidebar-footer-icon"
+                  href="${basePath}/workspace/"
+                  target=${EXTERNAL_LINK_TARGET}
+                  rel=${buildExternalLinkRel()}
+                  aria-label=${t("common.files")}
+                >
+                  ${icons.folder}
+                </a>
+              </openclaw-tooltip>
+              <openclaw-tooltip
                 .content=${t("chat.docsOpensInNewTab", { label: t("common.docs") })}
               >
                 <a

@@ -9,6 +9,7 @@ import {
 import { createServer as createHttpsServer } from "node:https";
 import type { TlsOptions } from "node:tls";
 import type { WebSocketServer } from "ws";
+import { resolveWorkspaceRoot } from "../agents/workspace-dir.js";
 import { resolveBundledChannelGatewayAuthBypassPaths } from "../channels/plugins/gateway-auth-bypass.js";
 import { getRuntimeConfig } from "../config/io.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
@@ -42,6 +43,7 @@ import {
 import type { PreauthConnectionBudget } from "./server/preauth-connection-budget.js";
 import type { ReadinessChecker } from "./server/readiness.js";
 import type { GatewayWsClient } from "./server/ws-types.js";
+import { handleWorkspaceBrowseRequest } from "./workspace-browse-http.js";
 
 type PluginHttpRequestHandler = (
   req: IncomingMessage,
@@ -739,6 +741,21 @@ export function createGatewayHttpServer(opts: {
               rateLimiter,
               resolveAvatar: (agentId) =>
                 resolveAgentAvatar(configSnapshot, agentId, { includeUiOverride: true }),
+            });
+          },
+        });
+        requestStages.push({
+          name: "workspace-browse",
+          run: () => {
+            const workspaceDir =
+              configSnapshot.agents?.defaults?.workspace ?? resolveWorkspaceRoot();
+            return handleWorkspaceBrowseRequest(req, res, {
+              basePath: controlUiBasePath,
+              workspaceDir,
+              resolvedAuth,
+              trustedProxies,
+              allowRealIpFallback,
+              rateLimiter,
             });
           },
         });
