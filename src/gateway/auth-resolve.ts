@@ -27,6 +27,8 @@ export type ResolvedGatewayAuth = {
   password?: string;
   allowTailscale: boolean;
   trustedProxy?: GatewayTrustedProxyConfig;
+  /** Resolved localToken for same-host CLI access in trusted-proxy mode. */
+  localToken?: string;
 };
 
 /** Shared-secret auth shape exposed to Gateway clients that support a single bearer secret. */
@@ -67,6 +69,9 @@ export function resolveGatewayAuth(params: {
     if (authOverride.trustedProxy !== undefined) {
       authConfig.trustedProxy = authOverride.trustedProxy;
     }
+    if (authOverride.localToken !== undefined) {
+      authConfig.localToken = authOverride.localToken;
+    }
   }
   const env = params.env ?? process.env;
   const tokenRef = resolveSecretInputRef({ value: authConfig.token }).ref;
@@ -83,6 +88,12 @@ export function resolveGatewayAuth(params: {
   const token = resolvedCredentials.token;
   const password = resolvedCredentials.password;
   const trustedProxy = authConfig.trustedProxy;
+  const localTokenRef = resolveSecretInputRef({ value: authConfig.localToken }).ref;
+  const localToken = localTokenRef
+    ? undefined
+    : typeof authConfig.localToken === "string"
+      ? authConfig.localToken.trim() || undefined
+      : undefined;
 
   let mode: ResolvedGatewayAuth["mode"];
   let modeSource: ResolvedGatewayAuth["modeSource"];
@@ -118,6 +129,7 @@ export function resolveGatewayAuth(params: {
     password,
     allowTailscale,
     trustedProxy,
+    localToken,
   };
 }
 

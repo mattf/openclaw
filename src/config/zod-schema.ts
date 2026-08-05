@@ -1163,6 +1163,7 @@ export const OpenClawSchema = z
               })
               .strict()
               .optional(),
+            localToken: SecretInputSchema.optional().register(sensitive),
           })
           .strict()
           .optional(),

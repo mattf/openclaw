@@ -1709,7 +1709,7 @@ class AppSidebar extends LitElement {
               >
                 <a
                   class="sidebar-footer-icon"
-                  href="${basePath}/workspace/"
+                  href="${this.basePath}/workspace/"
                   target=${EXTERNAL_LINK_TARGET}
                   rel=${buildExternalLinkRel()}
                   aria-label=${t("common.files")}
