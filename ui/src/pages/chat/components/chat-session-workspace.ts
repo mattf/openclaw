@@ -528,9 +528,13 @@ export function createSessionWorkspaceProps(state: SessionWorkspaceHost): Sessio
               agentId: workspace.agentId,
             }),
           ),
-        ).then(() => {
-          loadWorkspace(state, workspace, true);
-        });
+        )
+          .then(() => {
+            loadWorkspace(state, workspace, true);
+          })
+          .catch(() => {
+            loadWorkspace(state, workspace, true);
+          });
       };
       input.click();
     },
