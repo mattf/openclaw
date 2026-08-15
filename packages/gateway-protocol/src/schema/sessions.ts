@@ -173,6 +173,7 @@ export const SessionsFilesUploadResultSchema = Type.Object(
     sessionKey: NonEmptyString,
     path: NonEmptyString,
     size: Type.Integer({ minimum: 0 }),
+    root: NonEmptyString,
   },
   { additionalProperties: false },
 );

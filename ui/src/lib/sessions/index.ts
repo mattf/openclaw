@@ -392,9 +392,9 @@ function requestSessionFileUpload(
   path: string,
   base64Content: string,
   options: { agentId?: string | null; mimeType?: string } = {},
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; root?: string }> {
   return client
-    .request<{ ok: true; sessionKey: string; path: string; size: number }>(
+    .request<{ ok: true; sessionKey: string; path: string; size: number; root: string }>(
       "sessions.files.upload",
       {
         sessionKey: key,
@@ -404,7 +404,7 @@ function requestSessionFileUpload(
         ...(options.agentId?.trim() ? { agentId: options.agentId.trim() } : {}),
       },
     )
-    .then((result) => ({ ok: !!result }))
+    .then((result) => ({ ok: !!result, root: result.root }))
     .catch((err) => {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     });

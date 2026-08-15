@@ -644,11 +644,7 @@ export const sessionsFilesHandlers: GatewayRequestHandlers = {
     ) {
       return;
     }
-    const cfg = resolveAgentWorkspaceDir(import.meta.dirname, undefined);
-    const agentId = normalizeAgentId(
-      params.agentId ?? resolveDefaultAgentId({ workspaceBaseDir: cfg! }),
-    );
-    const loaded = loadSessionFiles({ sessionKey: params.sessionKey, agentId });
+    const loaded = loadSessionFiles({ sessionKey: params.sessionKey, agentId: params.agentId });
     const loadedResolved = await loaded;
     if (!loadedResolved.root) {
       respond(
@@ -702,6 +698,7 @@ export const sessionsFilesHandlers: GatewayRequestHandlers = {
       return;
     }
     try {
+      console.error(`[upload] writing ${browserPath} => root=${loadedResolved.root}`);
       const result = await writeWorkspaceFile(loadedResolved.root, browserPath, contentBytes);
       if (result.error) {
         respond(
@@ -723,6 +720,7 @@ export const sessionsFilesHandlers: GatewayRequestHandlers = {
       sessionKey: params.sessionKey,
       path: params.path,
       size: contentBytes.length,
+      root: loadedResolved.root,
     });
   },
   "sessions.files.download": async ({ params, respond }) => {
@@ -736,11 +734,7 @@ export const sessionsFilesHandlers: GatewayRequestHandlers = {
     ) {
       return;
     }
-    const cfg = resolveAgentWorkspaceDir(import.meta.dirname, undefined);
-    const agentId = normalizeAgentId(
-      params.agentId ?? resolveDefaultAgentId({ workspaceBaseDir: cfg! }),
-    );
-    const loaded = loadSessionFiles({ sessionKey: params.sessionKey, agentId });
+    const loaded = loadSessionFiles({ sessionKey: params.sessionKey, agentId: params.agentId });
     const loadedResolved = await loaded;
     if (!loadedResolved.root) {
       respond(
