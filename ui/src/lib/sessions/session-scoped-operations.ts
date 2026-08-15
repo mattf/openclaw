@@ -36,8 +36,10 @@ import {
   requestSessionCheckpoints,
   requestSessionCompact,
   requestSessionFile,
-  requestSessionFilesList,
+  requestSessionFileDownload,
   requestSessionFileSet,
+  requestSessionFilesList,
+  requestSessionFileUpload,
   requestSessionFork,
   requestSessionRewind,
   requestSessionSteer,
@@ -271,9 +273,48 @@ export function createSessionScopedOperations(host: SessionScopedOperationsHost)
     return result;
   };
 
+  const uploadFile = async (
+    key: string,
+    options: { file: Blob; agentId?: string | null },
+  ): Promise<boolean> => {
+    const scope = host.connection.capture();
+    if (!scope) {
+      return false;
+    }
+    const content = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(options.file);
+    });
+    const base64 = content.split(",")[1] ?? "";
+    const result = await requestSessionFileUpload(
+      scope.client,
+      key,
+      "",
+      base64,
+      options.agentId?.trim() ? { agentId: options.agentId.trim() } : {},
+    );
+    return result.ok;
+  };
+
+  const downloadFile = async (
+    key: string,
+    path: string,
+    options: { agentId?: string | null } = {},
+  ): Promise<boolean> => {
+    const scope = host.connection.capture();
+    if (!scope) {
+      return false;
+    }
+    const result = await requestSessionFileDownload(scope.client, key, path, options);
+    return result.ok;
+  };
+
   return {
     branchCheckpoint,
     compact,
+    downloadFile,
     forkAtMessage,
     getFile,
     listBranches,
@@ -286,6 +327,7 @@ export function createSessionScopedOperations(host: SessionScopedOperationsHost)
     subscribeMessages,
     switchBranch,
     unsubscribeMessages,
+    uploadFile,
     retireConnection(previousClient: GatewayBrowserClient | null) {
       if (previousClient) {
         resetGatewaySessionMessageSubscriptionCoordinator(previousClient);

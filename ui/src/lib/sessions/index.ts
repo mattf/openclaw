@@ -522,6 +522,8 @@ export function createSessionCapability(gateway: SessionGateway): SessionCapabil
     forkAtMessage: operations.forkAtMessage,
     listBranches: operations.listBranches,
     switchBranch: operations.switchBranch,
+    uploadFile: operations.uploadFile,
+    downloadFile: operations.downloadFile,
     groupsLoad: groups.load,
     groupsGeneration: groups.generation,
     groupsStatus: groups.status,

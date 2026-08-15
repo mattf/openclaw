@@ -241,6 +241,67 @@ export function requestSessionFileSet(
   });
 }
 
+export function requestSessionFileUpload(
+  client: SessionRequestClient,
+  key: string,
+  path: string,
+  base64Content: string,
+  options: { agentId?: string | null; mimeType?: string } = {},
+): Promise<{ ok: boolean; error?: string }> {
+  return client
+    .request<{ ok: true; sessionKey: string; path: string; size: number }>(
+      "sessions.files.upload",
+      {
+        sessionKey: key,
+        path,
+        base64Content,
+        ...(options.mimeType ? { mimeType: options.mimeType } : {}),
+        ...(options.agentId?.trim() ? { agentId: options.agentId.trim() } : {}),
+      },
+    )
+    .then((result) => ({ ok: !!result }))
+    .catch((err) => {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    });
+}
+
+export function requestSessionFileDownload(
+  client: SessionRequestClient,
+  key: string,
+  path: string,
+  options: { agentId?: string | null } = {},
+): Promise<{
+  ok: boolean;
+  data?: { mimeType: string; base64Content?: string; textContent?: string };
+  error?: string;
+}> {
+  return client
+    .request<{
+      ok: true;
+      sessionKey: string;
+      path: string;
+      size: number;
+      mimeType: string;
+      base64Content?: string;
+      textContent?: string;
+    }>("sessions.files.download", {
+      sessionKey: key,
+      path,
+      ...(options.agentId?.trim() ? { agentId: options.agentId.trim() } : {}),
+    })
+    .then((result) => ({
+      ok: true,
+      data: {
+        mimeType: result.mimeType,
+        base64Content: result.base64Content,
+        textContent: result.textContent,
+      },
+    }))
+    .catch((err) => {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    });
+}
+
 export function requestSessionCheckpoints(
   client: SessionRequestClient,
   key: string,

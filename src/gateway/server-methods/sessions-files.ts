@@ -12,11 +12,15 @@ import {
   type SessionFileBrowserResult,
   type SessionFileEntry,
   type SessionFileRelevance,
+  type SessionsFilesDownloadParams,
   type SessionsFilesGetParams,
-  validateSessionsFilesRevealParams,
+  type SessionsFilesUploadParams,
+  validateSessionsFilesDownloadParams,
   validateSessionsFilesGetParams,
   validateSessionsFilesListParams,
+  validateSessionsFilesRevealParams,
   validateSessionsFilesSetParams,
+  validateSessionsFilesUploadParams,
 } from "../../../packages/gateway-protocol/src/index.js";
 import { resolveAgentWorkspaceDir } from "../../agents/agent-scope.js";
 import { resolveToCwd as resolveSessionToolPathToCwd } from "../../agents/sessions/tools/path-utils.js";
@@ -45,6 +49,7 @@ import type { GatewayRequestHandlers, RespondFn } from "./types.js";
 import { assertValidParams } from "./validation.js";
 import {
   decodeUtf8Strict,
+  exportWorkspaceFile,
   listWorkspacePath,
   normalizeRelativePath,
   readWorkspaceFile,
@@ -57,6 +62,7 @@ import {
   updateWorkspaceFile,
   WORKSPACE_PREVIEW_MAX_BYTES,
   workspaceStatKind,
+  writeWorkspaceFile,
   type WorkspaceDirEntry,
   type WorkspaceFileUpdateResult,
 } from "./workspace-fs.js";
@@ -1106,6 +1112,221 @@ export const sessionsFilesHandlers: GatewayRequestHandlers = {
         `sessions.files.reveal failed path=${sanitizePathForLog(workspaceRoot)}: ${errorMessage}`,
       );
       respond(true, { ok: false, path: workspaceRoot, error: detailedError });
+    }
+  },
+
+  "sessions.files.upload": async ({ params, respond, context, sessionMutationAuthorization }) => {
+    if (
+      !assertValidParams(
+        params,
+        validateSessionsFilesUploadParams,
+        "sessions.files.upload",
+        respond,
+      )
+    ) {
+      return;
+    }
+    sessionMutationAuthorization?.assertCurrent();
+    const agentId = requireSessionFilesAgentId({
+      cfg: context.getRuntimeConfig(),
+      sessionKey: params.sessionKey,
+      agentId: params.agentId,
+      respond,
+    });
+    if (!agentId) {
+      return;
+    }
+    const loaded = loadSessionFileRoot({ ...params, agentId });
+    if (!loaded.root) {
+      respond(
+        false,
+        undefined,
+        sessionFilesError("session_file_not_found", "session file not found", {
+          path: params.path,
+        }),
+      );
+      return;
+    }
+    const candidates = resolveSessionFileCandidates({
+      root: loaded.root,
+      fileRoot: loaded.fileRoot,
+      filePath: params.path,
+    });
+    let browserPath: string | undefined;
+    for (const candidate of candidates) {
+      const candidatePath = toDisplayPath(loaded.root, candidate);
+      const stat = await statWorkspacePath(loaded.root, candidatePath);
+      if (stat && workspaceStatKind(stat) !== "directory") {
+        browserPath = candidatePath;
+        break;
+      }
+    }
+    if (!browserPath) {
+      browserPath = toDisplayPath(loaded.root, candidates[0]);
+    }
+    let contentBytes: Buffer;
+    try {
+      contentBytes = Buffer.from(params.base64Content, "base64");
+    } catch {
+      respond(
+        false,
+        undefined,
+        sessionFilesError("session_file_upload_invalid", "upload: base64 content is invalid", {
+          path: params.path,
+        }),
+      );
+      return;
+    }
+    const base64Check = contentBytes.toString("base64");
+    if (base64Check !== params.base64Content) {
+      respond(
+        false,
+        undefined,
+        sessionFilesError("session_file_upload_invalid", "upload: base64 content is invalid", {
+          path: params.path,
+        }),
+      );
+      return;
+    }
+    try {
+      const result = await writeWorkspaceFile(loaded.root, browserPath, contentBytes);
+      if (result.error) {
+        respond(
+          false,
+          undefined,
+          sessionFilesError(
+            "session_file_upload_failed",
+            "upload: file could not be saved safely",
+            { path: params.path },
+          ),
+        );
+        return;
+      }
+    } catch (err) {
+      if (err instanceof FsSafeError) {
+        respond(
+          false,
+          undefined,
+          sessionFilesError(
+            "session_file_upload_failed",
+            "upload: file could not be saved safely",
+            { path: params.path },
+          ),
+        );
+        return;
+      }
+      throw err;
+    }
+    respond(true, {
+      ok: true,
+      sessionKey: params.sessionKey,
+      path: params.path,
+      size: contentBytes.length,
+    });
+  },
+
+  "sessions.files.download": async ({ params, respond, context }) => {
+    if (
+      !assertValidParams(
+        params,
+        validateSessionsFilesDownloadParams,
+        "sessions.files.download",
+        respond,
+      )
+    ) {
+      return;
+    }
+    const agentId = requireSessionFilesAgentId({
+      cfg: context.getRuntimeConfig(),
+      sessionKey: params.sessionKey,
+      agentId: params.agentId,
+      respond,
+    });
+    if (!agentId) {
+      return;
+    }
+    const loaded = loadSessionFileRoot({ ...params, agentId });
+    if (!loaded.root) {
+      respond(
+        false,
+        undefined,
+        sessionFilesError("session_file_not_found", "session file not found", {
+          path: params.path,
+        }),
+      );
+      return;
+    }
+    const candidates = resolveSessionFileCandidates({
+      root: loaded.root,
+      fileRoot: loaded.fileRoot,
+      filePath: params.path,
+    });
+    let browserPath: string | undefined;
+    for (const candidate of candidates) {
+      const candidatePath = toDisplayPath(loaded.root, candidate);
+      const stat = await statWorkspacePath(loaded.root, candidatePath);
+      if (stat && workspaceStatKind(stat) === "file") {
+        browserPath = candidatePath;
+        break;
+      }
+    }
+    if (!browserPath) {
+      respond(
+        false,
+        undefined,
+        sessionFilesError("session_file_not_found", "session file not found", {
+          path: params.path,
+        }),
+      );
+      return;
+    }
+    const result = await exportWorkspaceFile(loaded.root, browserPath);
+    if ("status" in result && result.status === "missing") {
+      respond(
+        false,
+        undefined,
+        sessionFilesError("session_file_not_found", "session file not found", {
+          path: params.path,
+        }),
+      );
+      return;
+    }
+    if ("status" in result && result.status === "unsafe") {
+      respond(
+        false,
+        undefined,
+        sessionFilesError("session_file_unsafe", "session file could not be downloaded safely", {
+          path: params.path,
+        }),
+      );
+      return;
+    }
+    if (result.kind === "text") {
+      respond(true, {
+        ok: true,
+        sessionKey: params.sessionKey,
+        path: params.path,
+        size: Buffer.byteLength(result.content, "utf8"),
+        mimeType: "text/plain",
+        textContent: result.content,
+      });
+    } else {
+      const base64 = result.content.toString("base64");
+      const mime = params.path.endsWith(".png")
+        ? "image/png"
+        : params.path.endsWith(".jpg")
+          ? "image/jpeg"
+          : params.path.endsWith(".pdf")
+            ? "application/pdf"
+            : "application/octet-stream";
+      respond(true, {
+        ok: true,
+        sessionKey: params.sessionKey,
+        path: params.path,
+        size: result.content.length,
+        mimeType: mime,
+        base64Content: base64,
+      });
     }
   },
 };

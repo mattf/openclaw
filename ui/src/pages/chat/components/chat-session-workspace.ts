@@ -51,6 +51,7 @@ export type SessionWorkspaceProps = {
   /** Pane too narrow for a side rail: presentation forces the bottom dock
    * (the persisted dock preference still applies once the pane widens). */
   narrowLayout: boolean;
+  capability?: SessionCapability;
   onToggleCollapsed: () => void;
   onSetDock: (dock: ChatWorkspaceDock) => void;
   onRefresh: () => void;
@@ -966,6 +967,43 @@ export function renderSessionWorkspaceRail(
   const hasSessionItems = files.length > 0 || artifacts.length > 0;
   const hasBrowserItems = (browser?.entries.length ?? 0) > 0;
   const hasItems = hasSessionItems || hasBrowserItems;
+
+  const handleFileUpload = (event: Event) => {
+    const target = event.target as HTMLInputElement;
+    const file = target.files?.[0];
+    if (!file) return;
+    target.value = "";
+    const capability = sessionWorkspace.capability;
+    const key = sessionWorkspace.sessionKey;
+    const displayName = file.name;
+    capability
+      ?.uploadFile(key, { file })
+      .then((success) => {
+        if (success) {
+          sessionWorkspace.onRefresh();
+        } else {
+          // Upload failed — no toast needed per user request
+        }
+      })
+      .catch(() => {
+        // Silently ignore upload failures
+      });
+  };
+
+  const handleFileDownload = async (path: string): Promise<void> => {
+    const capability = sessionWorkspace.capability;
+    if (!capability) return;
+    const key = sessionWorkspace.sessionKey;
+    try {
+      const result = await capability.downloadFile(key, path, {});
+      if (result) {
+        sessionWorkspace.onRefresh();
+      }
+    } catch {
+      // Silently ignore download failures
+    }
+  };
+
   const renderPathActions = (path: string, origin: "session" | "workspace"): TemplateResult => html`
     <span
       class="chat-workspace-rail__row-actions"
@@ -983,6 +1021,19 @@ export function renderSessionWorkspaceRail(
           }}
         >
           ${icons.eye}
+        </button>
+      </openclaw-tooltip>
+      <openclaw-tooltip .content=${t("chat.workspaceFiles.download")}>
+        <button
+          class="chat-workspace-rail__row-action"
+          type="button"
+          aria-label=${t("chat.workspaceFiles.download")}
+          @click=${(event: Event) => {
+            event.stopPropagation();
+            handleFileDownload(path);
+          }}
+        >
+          ${icons.folderDown}
         </button>
       </openclaw-tooltip>
       <openclaw-tooltip .content=${t("chat.workspaceFiles.copyPath")}>
@@ -1263,6 +1314,31 @@ export function renderSessionWorkspaceRail(
                   </button>
                 </openclaw-tooltip>
               `}
+          <input
+            type="file"
+            class="chat-workspace-rail__upload-input"
+            aria-hidden="true"
+            tabindex="-1"
+            style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0"
+            @change=${handleFileUpload}
+          />
+          <openclaw-tooltip .content=${t("chat.workspaceFiles.upload")}>
+            <button
+              class="rail-header__action chat-workspace-rail__upload"
+              type="button"
+              aria-label=${t("chat.workspaceFiles.upload")}
+              ?disabled=${sessionWorkspace.loading || !!browser?.search}
+              title=${browser?.search ? t("chat.workspaceFiles.uploadDisabledSearch") : ""}
+              @click=${() => {
+                const input = sessionWorkspace.renderRoot.querySelector(
+                  ".chat-workspace-rail__upload-input",
+                ) as HTMLInputElement | null;
+                input?.click();
+              }}
+            >
+              ${icons.folderUp}
+            </button>
+          </openclaw-tooltip>
           <openclaw-tooltip .content=${t("chat.workspaceFiles.refresh")}>
             <button
               class="rail-header__action chat-workspace-rail__refresh"

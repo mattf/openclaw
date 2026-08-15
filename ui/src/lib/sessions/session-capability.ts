@@ -213,6 +213,12 @@ export type SessionCapability = {
     content: string,
     options: { agentId?: string | null; expectedHash: string },
   ) => Promise<SessionWorkspaceSetResult | null>;
+  uploadFile: (key: string, options: { file: Blob; agentId?: string | null }) => Promise<boolean>;
+  downloadFile: (
+    key: string,
+    filePath: string,
+    options?: { agentId?: string | null },
+  ) => Promise<boolean>;
   subscribeMessages: (
     key: string,
     options?: { agentId?: string | null; includeApprovals?: boolean },

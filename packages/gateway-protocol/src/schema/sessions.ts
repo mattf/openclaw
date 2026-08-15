@@ -304,6 +304,51 @@ export const SessionsFilesRevealResultSchema = closedObject({
   error: Type.Optional(NonEmptyString),
 });
 
+/** Uploads one file into the session workspace. */
+export const SessionsFilesUploadParamsSchema = closedObject(
+  {
+    sessionKey: NonEmptyString,
+    path: NonEmptyString,
+    base64Content: Type.String(),
+    mimeType: Type.Optional(NonEmptyString),
+  },
+  { additionalProperties: false },
+);
+
+/** Result of a file upload operation. */
+export const SessionsFilesUploadResultSchema = closedObject(
+  {
+    ok: Type.Literal(true),
+    sessionKey: NonEmptyString,
+    path: NonEmptyString,
+    size: Type.Integer({ minimum: 0 }),
+  },
+  { additionalProperties: false },
+);
+
+/** Downloads one file from the session workspace. */
+export const SessionsFilesDownloadParamsSchema = closedObject(
+  {
+    sessionKey: NonEmptyString,
+    path: NonEmptyString,
+  },
+  { additionalProperties: false },
+);
+
+/** Result of a file download operation. */
+export const SessionsFilesDownloadResultSchema = closedObject(
+  {
+    ok: Type.Literal(true),
+    sessionKey: NonEmptyString,
+    path: NonEmptyString,
+    size: Type.Integer({ minimum: 0 }),
+    mimeType: NonEmptyString,
+    base64Content: Type.Optional(Type.String()),
+    textContent: Type.Optional(Type.String()),
+  },
+  { additionalProperties: false },
+);
+
 /** Change status for one file in a session checkout diff. */
 export const SessionDiffFileStatusSchema = Type.Union([
   Type.Literal("added"),
@@ -887,6 +932,10 @@ export type SessionsFilesSetParams = Static<typeof SessionsFilesSetParamsSchema>
 export type SessionsFilesSetResult = Static<typeof SessionsFilesSetResultSchema>;
 export type SessionsFilesRevealParams = Static<typeof SessionsFilesRevealParamsSchema>;
 export type SessionsFilesRevealResult = Static<typeof SessionsFilesRevealResultSchema>;
+export type SessionsFilesUploadParams = Static<typeof SessionsFilesUploadParamsSchema>;
+export type SessionsFilesUploadResult = Static<typeof SessionsFilesUploadResultSchema>;
+export type SessionsFilesDownloadParams = Static<typeof SessionsFilesDownloadParamsSchema>;
+export type SessionsFilesDownloadResult = Static<typeof SessionsFilesDownloadResultSchema>;
 export type SessionDiffFileStatus = Static<typeof SessionDiffFileStatusSchema>;
 export type SessionDiffFile = Static<typeof SessionDiffFileSchema>;
 export type SessionDiffCommit = Static<typeof SessionDiffCommitSchema>;

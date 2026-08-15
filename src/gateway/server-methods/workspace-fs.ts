@@ -287,3 +287,95 @@ export function sortWorkspaceEntries<T extends { kind: "file" | "directory"; nam
     return a.name.localeCompare(b.name);
   });
 }
+
+export type WorkspaceFileExportResult =
+  | { kind: "text"; content: string; canonicalPath: string; stat: WorkspacePathStat }
+  | { kind: "binary"; content: Uint8Array; canonicalPath: string; stat: WorkspacePathStat }
+  | { status: "missing" }
+  | { status: "unsafe" };
+
+export async function exportWorkspaceFile(
+  rootDir: string,
+  browserPath: string,
+): Promise<WorkspaceFileExportResult> {
+  const workspaceRoot = await openWorkspaceRoot(rootDir);
+  if (!workspaceRoot) {
+    return { status: "unsafe" };
+  }
+  try {
+    const opened = await workspaceRoot.open(browserPath, {
+      hardlinks: "reject",
+      nonBlockingRead: true,
+      symlinks: "reject",
+    });
+    try {
+      const isDirectory =
+        typeof opened.stat.isDirectory === "function"
+          ? opened.stat.isDirectory()
+          : opened.stat.isDirectory;
+      if (isDirectory) {
+        return { status: "unsafe" };
+      }
+      const buffer = Buffer.allocUnsafe(opened.stat.size);
+      const bytesRead = await readFileWindowFully(opened.handle, buffer, 0);
+      const data = buffer.subarray(0, bytesRead);
+      const decoded = decodeUtf8Strict(data);
+      if (decoded !== undefined) {
+        return {
+          kind: "text" as const,
+          content: decoded,
+          canonicalPath: path
+            .relative(workspaceRoot.rootReal, opened.realPath)
+            .split(path.sep)
+            .join("/"),
+          stat: opened.stat,
+        };
+      }
+      return {
+        kind: "binary" as const,
+        content: data,
+        canonicalPath: path
+          .relative(workspaceRoot.rootReal, opened.realPath)
+          .split(path.sep)
+          .join("/"),
+        stat: opened.stat,
+      };
+    } finally {
+      await opened.handle.close();
+    }
+  } catch {
+    return { status: "missing" as const };
+  }
+}
+
+/** Similar to openWorkspaceRoot but without preview byte constraints. */
+async function openUploadRoot(rootDir: string): Promise<WorkspaceRoot | undefined> {
+  try {
+    return await fsSafeRoot(rootDir, {
+      hardlinks: "reject",
+      symlinks: "reject",
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+export async function writeWorkspaceFile(
+  rootDir: string,
+  browserPath: string,
+  content: Buffer,
+): Promise<{ success: true } | { error: string }> {
+  const workspaceRoot = await openUploadRoot(rootDir);
+  if (!workspaceRoot) {
+    return { error: "workspace-not-found" };
+  }
+  try {
+    await workspaceRoot.write(browserPath, content, { renameIdentity: "strict" });
+    return { success: true };
+  } catch (err) {
+    if (err instanceof FsSafeError) {
+      return { error: "unsafe" };
+    }
+    throw err;
+  }
+}
