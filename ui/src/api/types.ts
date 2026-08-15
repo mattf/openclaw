@@ -418,6 +418,30 @@ export type SessionWorkspaceListResult = {
   artifacts?: SessionWorkspaceArtifactEntry[];
 };
 
+export type SessionWorkspaceSetResult = {
+  ok: true;
+  sessionKey: string;
+  root?: string;
+  file: SessionWorkspaceFileEntry;
+};
+
+export type SessionWorkspaceUploadResult = {
+  sessionKey: string;
+  ok: true;
+  path: string;
+  size: number;
+};
+
+export type SessionWorkspaceDownloadResult = {
+  sessionKey: string;
+  ok: true;
+  path: string;
+  size: number;
+  mimeType: string;
+  base64Content?: string;
+  textContent?: string;
+};
+
 export type SessionWorkspaceGetResult = {
   sessionKey: string;
   root?: string;

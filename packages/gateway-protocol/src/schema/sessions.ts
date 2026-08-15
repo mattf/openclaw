@@ -155,6 +155,51 @@ export const SessionsFilesGetResultSchema = Type.Object(
   { additionalProperties: false },
 );
 
+/** Uploads one file into the session workspace. */
+export const SessionsFilesUploadParamsSchema = Type.Object(
+  {
+    sessionKey: NonEmptyString,
+    path: NonEmptyString,
+    base64Content: Type.String(),
+    mimeType: Type.Optional(NonEmptyString),
+  },
+  { additionalProperties: false },
+);
+
+/** Result of a file upload operation. */
+export const SessionsFilesUploadResultSchema = Type.Object(
+  {
+    ok: Type.Literal(true),
+    sessionKey: NonEmptyString,
+    path: NonEmptyString,
+    size: Type.Integer({ minimum: 0 }),
+  },
+  { additionalProperties: false },
+);
+
+/** Downloads one file from the session workspace. */
+export const SessionsFilesDownloadParamsSchema = Type.Object(
+  {
+    sessionKey: NonEmptyString,
+    path: NonEmptyString,
+  },
+  { additionalProperties: false },
+);
+
+/** Result of a file download operation. */
+export const SessionsFilesDownloadResultSchema = Type.Object(
+  {
+    ok: Type.Literal(true),
+    sessionKey: NonEmptyString,
+    path: NonEmptyString,
+    size: Type.Integer({ minimum: 0 }),
+    mimeType: NonEmptyString,
+    base64Content: Type.Optional(Type.String()),
+    textContent: Type.Optional(Type.String()),
+  },
+  { additionalProperties: false },
+);
+
 /** Lists sessions with optional scope, activity, label, and preview filters. */
 export const SessionsListParamsSchema = Type.Object(
   {

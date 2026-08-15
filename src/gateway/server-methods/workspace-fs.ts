@@ -159,3 +159,100 @@ export function sortWorkspaceEntries<T extends { kind: "file" | "directory"; nam
     return a.name.localeCompare(b.name);
   });
 }
+
+export type WorkspaceFileExportResult =
+  | { kind: "text"; content: string; canonicalPath: string; stat: WorkspacePathStat }
+  | { kind: "binary"; content: Uint8Array; canonicalPath: string; stat: WorkspacePathStat }
+  | { status: "missing" }
+  | { status: "unsafe" };
+
+function isTextData(data: Uint8Array): boolean {
+  const len = Math.min(data.length, 8192);
+  for (let i = 0; i < len; i++) {
+    const byte = data[i];
+    if (byte === 0) return false;
+    if (byte < 0x09 || (byte > 0x0d && byte < 0x20) || byte === 0x7f) return false;
+  }
+  return true;
+}
+
+export async function exportWorkspaceFile(
+  rootDir: string,
+  browserPath: string,
+): Promise<WorkspaceFileExportResult> {
+  const workspaceRoot = await openWorkspaceRoot(rootDir);
+  if (!workspaceRoot) {
+    return { status: "unsafe" };
+  }
+  try {
+    const opened = await workspaceRoot.open(browserPath, {
+      hardlinks: "reject",
+      symlinks: "reject",
+    });
+    try {
+      const stat = opened.stat;
+      const isDirectory =
+        typeof stat.isDirectory === "function" ? stat.isDirectory() : stat.isDirectory;
+      if (isDirectory) {
+        return { status: "unsafe" };
+      }
+      const buffer = Buffer.alloc(stat.size);
+      const { bytesRead } = await opened.handle.read(buffer, 0, stat.size, 0);
+      const data = buffer.subarray(0, bytesRead);
+      const canonicalPath = path
+        .relative(workspaceRoot.rootReal, opened.realPath)
+        .split(path.sep)
+        .join("/");
+      const decoded = isTextData(data) ? data.toString("utf8") : undefined;
+      if (decoded !== undefined) {
+        return {
+          kind: "text" as const,
+          content: decoded,
+          canonicalPath,
+          stat,
+        };
+      }
+      return {
+        kind: "binary" as const,
+        content: data,
+        canonicalPath,
+        stat,
+      };
+    } finally {
+      await opened.handle.close();
+    }
+  } catch {
+    return { status: "missing" as const };
+  }
+}
+
+async function openUploadRoot(rootDir: string): Promise<ReturnType<typeof fsSafeRoot> | undefined> {
+  try {
+    return await fsSafeRoot(rootDir, {
+      hardlinks: "reject",
+      symlinks: "reject",
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+export async function writeWorkspaceFile(
+  rootDir: string,
+  browserPath: string,
+  content: Buffer,
+): Promise<{ success: true } | { error: string }> {
+  const workspaceRoot = await openUploadRoot(rootDir);
+  if (!workspaceRoot) {
+    return { error: "workspace-not-found" };
+  }
+  try {
+    await workspaceRoot.write(browserPath, content, { renameIdentity: "strict" });
+    return { success: true };
+  } catch (err) {
+    if (err instanceof FsSafeError) {
+      return { error: "unsafe" };
+    }
+    throw err;
+  }
+}

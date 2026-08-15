@@ -1,6 +1,11 @@
 import { html, nothing, type TemplateResult } from "lit";
 import type { GatewayBrowserClient, GatewayHelloOk } from "../../../api/gateway.ts";
-import type { ArtifactDownloadResult, SessionWorkspaceListResult } from "../../../api/types.ts";
+import type {
+  ArtifactDownloadResult,
+  SessionWorkspaceDownloadResult,
+  SessionWorkspaceListResult,
+  SessionWorkspaceUploadResult,
+} from "../../../api/types.ts";
 import { icons } from "../../../components/icons.ts";
 import "../../../components/tooltip.ts";
 import { t } from "../../../i18n/index.ts";
@@ -18,6 +23,7 @@ import { normalizeOptionalString } from "../../../lib/string-coerce.ts";
 import type { SidebarContent } from "./chat-sidebar.ts";
 
 export type SessionWorkspaceProps = {
+  capability: SessionCapability;
   collapsed: boolean;
   sessionKey: string;
   list: SessionWorkspaceListResult | null;
@@ -443,6 +449,7 @@ function openArtifact(
 
 export function createSessionWorkspaceProps(state: SessionWorkspaceHost): SessionWorkspaceProps {
   const workspace = getWorkspaceState(state);
+  const capability = state.sessions;
   if (
     !workspace.collapsed &&
     state.connected &&
@@ -454,6 +461,7 @@ export function createSessionWorkspaceProps(state: SessionWorkspaceHost): Sessio
     loadWorkspace(state, workspace);
   }
   return {
+    capability,
     collapsed: workspace.collapsed,
     sessionKey: state.sessionKey,
     list: workspace.list?.sessionKey === state.sessionKey ? workspace.list : null,
@@ -504,6 +512,26 @@ export function createSessionWorkspaceProps(state: SessionWorkspaceHost): Sessio
           );
         }
       : undefined,
+    uploadFile: async () => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.multiple = "true";
+      input.onchange = () => {
+        const files = input.files;
+        if (!files) return;
+        void Promise.all(
+          Array.from(files).map((file) =>
+            capability.uploadFile(sessionKey, {
+              file,
+              agentId: capabilityAgentId,
+            }),
+          ),
+        ).then(() => {
+          loadWorkspace(state, workspace, true);
+        });
+      };
+      input.click();
+    },
   };
 }
 
@@ -594,40 +622,61 @@ export function renderSessionWorkspaceRail(
   const hasSessionItems = files.length > 0 || artifacts.length > 0;
   const hasBrowserItems = (browser?.entries.length ?? 0) > 0;
   const hasItems = hasSessionItems || hasBrowserItems;
-  const renderPathActions = (path: string, origin: "session" | "workspace"): TemplateResult => html`
-    <span
-      class="chat-workspace-rail__row-actions"
-      role="group"
-      aria-label=${t("chat.workspaceFiles.actions")}
-    >
-      <openclaw-tooltip .content=${t("chat.workspaceFiles.preview")}>
-        <button
-          class="chat-workspace-rail__row-action"
-          type="button"
-          aria-label=${t("chat.workspaceFiles.preview")}
-          @click=${(event: Event) => {
-            event.stopPropagation();
-            sessionWorkspace.onOpenFile(path, origin);
-          }}
-        >
-          ${icons.eye}
-        </button>
-      </openclaw-tooltip>
-      <openclaw-tooltip .content=${t("chat.workspaceFiles.copyPath")}>
-        <button
-          class="chat-workspace-rail__row-action"
-          type="button"
-          aria-label=${t("chat.workspaceFiles.copyPath")}
-          @click=${(event: Event) => {
-            event.stopPropagation();
-            sessionWorkspace.onCopyPath(path);
-          }}
-        >
-          ${icons.copy}
-        </button>
-      </openclaw-tooltip>
-    </span>
-  `;
+  const renderPathActions = (path: string, origin: "session" | "workspace"): TemplateResult => {
+    const isSessionOrigin = origin === "session";
+    const isSearchActive = sessionState.browserSearch.length > 0;
+    return html`
+      <span
+        class="chat-workspace-rail__row-actions"
+        role="group"
+        aria-label=${t("chat.workspaceFiles.actions")}
+      >
+        <openclaw-tooltip .content=${t("chat.workspaceFiles.preview")}>
+          <button
+            class="chat-workspace-rail__row-action"
+            type="button"
+            aria-label=${t("chat.workspaceFiles.preview")}
+            @click=${(event: Event) => {
+              event.stopPropagation();
+              sessionWorkspace.onOpenFile(path, origin);
+            }}
+          >
+            ${icons.eye}
+          </button>
+        </openclaw-tooltip>
+        ${isSessionOrigin
+          ? html`
+              <openclaw-tooltip .content=${t("chat.workspaceFiles.download")}>
+                <button
+                  class="chat-workspace-rail__row-action"
+                  type="button"
+                  aria-label=${t("chat.workspaceFiles.download")}
+                  @click=${(event: Event) => {
+                    event.stopPropagation();
+                    void capability.downloadFile(sessionKey, path, { agentId: capabilityAgentId });
+                  }}
+                >
+                  ${icons.folderDown}
+                </button>
+              </openclaw-tooltip>
+            `
+          : nothing}
+        <openclaw-tooltip .content=${t("chat.workspaceFiles.copyPath")}>
+          <button
+            class="chat-workspace-rail__row-action"
+            type="button"
+            aria-label=${t("chat.workspaceFiles.copyPath")}
+            @click=${(event: Event) => {
+              event.stopPropagation();
+              sessionWorkspace.onCopyPath(path);
+            }}
+          >
+            ${icons.copy}
+          </button>
+        </openclaw-tooltip>
+      </span>
+    `;
+  };
   const renderSessionSummary = (): TemplateResult | typeof nothing => {
     if (!sessionWorkspace.list) {
       return nothing;
@@ -877,6 +926,21 @@ export function renderSessionWorkspaceRail(
               @click=${sessionWorkspace.onRefresh}
             >
               ${icons.refresh}
+            </button>
+          </openclaw-tooltip>
+          <openclaw-tooltip
+            .content=${browserState.browserSearch.length > 0
+              ? t("chat.workspaceFiles.uploadDisabledSearch")
+              : t("chat.workspaceFiles.upload")}
+          >
+            <button
+              class="btn btn--ghost btn--sm chat-workspace-rail__upload"
+              type="button"
+              aria-label=${t("chat.workspaceFiles.upload")}
+              ?disabled=${browserState.browserSearch.length > 0}
+              @click=${uploadFile}
+            >
+              ${icons.folderUp}
             </button>
           </openclaw-tooltip>
           <openclaw-tooltip .content=${t("chat.workspaceFiles.collapse")}>

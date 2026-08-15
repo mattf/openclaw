@@ -175,6 +175,12 @@ export type SessionCapability = {
     path: string,
     options?: { agentId?: string | null },
   ) => Promise<SessionWorkspaceGetResult | null>;
+  uploadFile: (key: string, options: { file: Blob; agentId?: string | null }) => Promise<boolean>;
+  downloadFile: (
+    key: string,
+    filePath: string,
+    options?: { agentId?: string | null },
+  ) => Promise<boolean>;
   subscribeMessages: (
     key: string,
     options?: { agentId?: string | null },
@@ -377,6 +383,83 @@ function requestSessionFile(
     sessionKey: key,
     path,
     ...(options.agentId?.trim() ? { agentId: options.agentId.trim() } : {}),
+  });
+}
+
+function requestSessionFileUpload(
+  client: SessionRequestClient,
+  key: string,
+  path: string,
+  base64Content: string,
+  options: { agentId?: string | null; mimeType?: string } = {},
+): Promise<{ ok: boolean; error?: string }> {
+  return client
+    .request<{ ok: true; sessionKey: string; path: string; size: number }>(
+      "sessions.files.upload",
+      {
+        sessionKey: key,
+        path,
+        base64Content,
+        ...(options.mimeType ? { mimeType: options.mimeType } : {}),
+        ...(options.agentId?.trim() ? { agentId: options.agentId.trim() } : {}),
+      },
+    )
+    .then((result) => ({ ok: !!result }))
+    .catch((err) => {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    });
+}
+
+function requestSessionFileDownload(
+  client: SessionRequestClient,
+  key: string,
+  path: string,
+  options: { agentId?: string | null } = {},
+): Promise<{
+  ok: boolean;
+  data?: { mimeType: string; base64Content?: string; textContent?: string };
+  error?: string;
+}> {
+  return client
+    .request<{
+      ok: true;
+      sessionKey: string;
+      path: string;
+      size: number;
+      mimeType: string;
+      base64Content?: string;
+      textContent?: string;
+    }>("sessions.files.download", {
+      sessionKey: key,
+      path,
+      ...(options.agentId?.trim() ? { agentId: options.agentId.trim() } : {}),
+    })
+    .then((result) => ({
+      ok: true,
+      data: {
+        mimeType: result.mimeType,
+        base64Content: result.base64Content,
+        textContent: result.textContent,
+      },
+    }))
+    .catch((err) => {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    });
+}
+
+function fileToBase64(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        const base64 = reader.result.split(",")[1];
+        resolve(base64);
+      } else {
+        reject(new Error("Failed to convert file to base64"));
+      }
+    };
+    reader.onerror = () => reject(new Error("FileReader error"));
+    reader.readAsDataURL(file);
   });
 }
 
@@ -943,6 +1026,72 @@ export function createSessionCapability(gateway: SessionGateway): SessionCapabil
     return disposed || gateway.snapshot.client !== client ? null : result;
   };
 
+  const uploadFile = async (
+    key: string,
+    options: { file: Blob; agentId?: string | null },
+  ): Promise<boolean> => {
+    const client = gateway.snapshot.client;
+    if (!client || !gateway.snapshot.connected || disposed) {
+      return false;
+    }
+    const fileName = options.file.name?.replace(/\\/g, "/") || "unnamed";
+    const path = options.file.webkitRelativePath || fileName;
+    try {
+      const content = await fileToBase64(options.file);
+      const uploadResult = await requestSessionFileUpload(client, key, path, content, {
+        agentId: options.agentId,
+      });
+      return uploadResult.ok && !uploadResult.error;
+    } catch {
+      return false;
+    }
+  };
+
+  const downloadFile = async (
+    key: string,
+    filePath: string,
+    options: { agentId?: string | null } = {},
+  ): Promise<boolean> => {
+    const client = gateway.snapshot.client;
+    if (!client || !gateway.snapshot.connected || disposed) {
+      return false;
+    }
+    try {
+      const { data } = await requestSessionFileDownload(client, key, filePath, options);
+      if (!data) {
+        return false;
+      }
+      const fileName = filePath.split("/").pop() || "download";
+      if (data.base64Content) {
+        const bytes = Uint8Array.from(atob(data.base64Content), (c) => c.charCodeAt(0));
+        const blob = new Blob([bytes], { type: data.mimeType || "application/octet-stream" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } else if (data.textContent !== undefined) {
+        const blob = new Blob([data.textContent], {
+          type: "text/plain;charset=utf-8",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const subscribeMessages = async (
     key: string,
     options: { agentId?: string | null } = {},
@@ -1122,6 +1271,8 @@ export function createSessionCapability(gateway: SessionGateway): SessionCapabil
     steer,
     listFiles,
     getFile,
+    uploadFile,
+    downloadFile,
     subscribeMessages,
     unsubscribeMessages,
     listCheckpoints,

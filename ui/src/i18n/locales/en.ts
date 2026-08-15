@@ -1727,6 +1727,10 @@ export const en: TranslationMap = {
       actions: "Workspace file actions",
       preview: "Preview",
       copyPath: "Copy path",
+      upload: "Upload to workspace",
+      uploadDisabledSearch: "Search mode active — clear search to upload",
+      download: "Download file",
+      downloadProgress: "Downloading {file}…",
     },
   },
   languages: {

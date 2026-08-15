@@ -419,6 +419,10 @@ import {
   SessionsDeleteParamsSchema,
   type SessionsDescribeParams,
   SessionsDescribeParamsSchema,
+  type SessionsFilesDownloadParams,
+  SessionsFilesDownloadParamsSchema,
+  type SessionsFilesDownloadResult,
+  SessionsFilesDownloadResultSchema,
   type SessionsFilesGetParams,
   SessionsFilesGetParamsSchema,
   type SessionsFilesGetResult,
@@ -427,6 +431,10 @@ import {
   SessionsFilesListParamsSchema,
   type SessionsFilesListResult,
   SessionsFilesListResultSchema,
+  type SessionsFilesUploadParams,
+  SessionsFilesUploadParamsSchema,
+  type SessionsFilesUploadResult,
+  SessionsFilesUploadResultSchema,
   type SessionsListParams,
   SessionsListParamsSchema,
   type SessionsMessagesSubscribeParams,
@@ -793,6 +801,12 @@ export const validateSessionsFilesListParams = lazyCompile<SessionsFilesListPara
 );
 export const validateSessionsFilesGetParams = lazyCompile<SessionsFilesGetParams>(
   SessionsFilesGetParamsSchema,
+);
+export const validateSessionsFilesUploadParams = lazyCompile<SessionsFilesUploadParams>(
+  SessionsFilesUploadParamsSchema,
+);
+export const validateSessionsFilesDownloadParams = lazyCompile<SessionsFilesDownloadParams>(
+  SessionsFilesDownloadParamsSchema,
 );
 export const validateSessionsCreateParams = lazyCompile<SessionsCreateParams>(
   SessionsCreateParamsSchema,
