@@ -38,6 +38,8 @@ export type SessionWorkspaceProps = {
   onSearch: (search: string) => void;
   onOpenArtifact: (artifactId: string) => void;
   onToggleTerminal?: () => void;
+  uploadFile?: () => Promise<void>;
+  capabilityAgentId: string;
 };
 
 type SessionWorkspaceState = {
@@ -521,9 +523,9 @@ export function createSessionWorkspaceProps(state: SessionWorkspaceHost): Sessio
         if (!files) return;
         void Promise.all(
           Array.from(files).map((file) =>
-            capability.uploadFile(sessionKey, {
+            capability.uploadFile(workspace.sessionKey, {
               file,
-              agentId: capabilityAgentId,
+              agentId: workspace.agentId,
             }),
           ),
         ).then(() => {
@@ -532,6 +534,7 @@ export function createSessionWorkspaceProps(state: SessionWorkspaceHost): Sessio
       };
       input.click();
     },
+    capabilityAgentId: workspace.agentId,
   };
 }
 
@@ -624,7 +627,7 @@ export function renderSessionWorkspaceRail(
   const hasItems = hasSessionItems || hasBrowserItems;
   const renderPathActions = (path: string, origin: "session" | "workspace"): TemplateResult => {
     const isSessionOrigin = origin === "session";
-    const isSearchActive = sessionState.browserSearch.length > 0;
+    const isSearchActive = (sessionWorkspace.list?.browser?.search?.length ?? 0) > 0;
     return html`
       <span
         class="chat-workspace-rail__row-actions"
@@ -653,7 +656,9 @@ export function renderSessionWorkspaceRail(
                   aria-label=${t("chat.workspaceFiles.download")}
                   @click=${(event: Event) => {
                     event.stopPropagation();
-                    void capability.downloadFile(sessionKey, path, { agentId: capabilityAgentId });
+                    void capability.downloadFile(sessionWorkspace.sessionKey, path, {
+                      agentId: sessionWorkspace.capabilityAgentId,
+                    });
                   }}
                 >
                   ${icons.folderDown}
@@ -929,7 +934,7 @@ export function renderSessionWorkspaceRail(
             </button>
           </openclaw-tooltip>
           <openclaw-tooltip
-            .content=${browserState.browserSearch.length > 0
+            .content=${(sessionWorkspace.list?.browser?.search?.length ?? 0) > 0
               ? t("chat.workspaceFiles.uploadDisabledSearch")
               : t("chat.workspaceFiles.upload")}
           >
@@ -937,8 +942,8 @@ export function renderSessionWorkspaceRail(
               class="btn btn--ghost btn--sm chat-workspace-rail__upload"
               type="button"
               aria-label=${t("chat.workspaceFiles.upload")}
-              ?disabled=${browserState.browserSearch.length > 0}
-              @click=${uploadFile}
+              ?disabled=${(sessionWorkspace.list?.browser?.search?.length ?? 0) > 0}
+              @click=${sessionWorkspace.uploadFile}
             >
               ${icons.folderUp}
             </button>
