@@ -162,6 +162,7 @@ export const SessionsFilesUploadParamsSchema = Type.Object(
     path: NonEmptyString,
     base64Content: Type.String(),
     mimeType: Type.Optional(NonEmptyString),
+    agentId: Type.Optional(NonEmptyString),
   },
   { additionalProperties: false },
 );
@@ -183,6 +184,7 @@ export const SessionsFilesDownloadParamsSchema = Type.Object(
   {
     sessionKey: NonEmptyString,
     path: NonEmptyString,
+    agentId: Type.Optional(NonEmptyString),
   },
   { additionalProperties: false },
 );
