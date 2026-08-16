@@ -658,7 +658,7 @@ export function renderSessionWorkspaceRail(
             aria-label=${t("chat.workspaceFiles.download")}
             @click=${(event: Event) => {
               event.stopPropagation();
-              void capability.downloadFile(sessionWorkspace.sessionKey, path, {
+              void sessionWorkspace.capability.downloadFile(sessionWorkspace.sessionKey, path, {
                 agentId: sessionWorkspace.capabilityAgentId,
               });
             }}
