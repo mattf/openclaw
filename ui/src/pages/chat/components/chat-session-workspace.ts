@@ -651,25 +651,21 @@ export function renderSessionWorkspaceRail(
             ${icons.eye}
           </button>
         </openclaw-tooltip>
-        ${isSessionOrigin
-          ? html`
-              <openclaw-tooltip .content=${t("chat.workspaceFiles.download")}>
-                <button
-                  class="chat-workspace-rail__row-action"
-                  type="button"
-                  aria-label=${t("chat.workspaceFiles.download")}
-                  @click=${(event: Event) => {
-                    event.stopPropagation();
-                    void capability.downloadFile(sessionWorkspace.sessionKey, path, {
-                      agentId: sessionWorkspace.capabilityAgentId,
-                    });
-                  }}
-                >
-                  ${icons.folderDown}
-                </button>
-              </openclaw-tooltip>
-            `
-          : nothing}
+        <openclaw-tooltip .content=${t("chat.workspaceFiles.download")}>
+          <button
+            class="chat-workspace-rail__row-action"
+            type="button"
+            aria-label=${t("chat.workspaceFiles.download")}
+            @click=${(event: Event) => {
+              event.stopPropagation();
+              void capability.downloadFile(sessionWorkspace.sessionKey, path, {
+                agentId: sessionWorkspace.capabilityAgentId,
+              });
+            }}
+          >
+            ${icons.folderDown}
+          </button>
+        </openclaw-tooltip>
         <openclaw-tooltip .content=${t("chat.workspaceFiles.copyPath")}>
           <button
             class="chat-workspace-rail__row-action"
