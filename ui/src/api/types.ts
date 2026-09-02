@@ -30,6 +30,8 @@ export type {
   AgentsFilesSetResult,
   SessionsFilesGetResult as SessionWorkspaceGetResult,
   SessionsFilesSetResult as SessionWorkspaceSetResult,
+  SessionsFilesUploadResult as SessionWorkspaceUploadResult,
+  SessionsFilesDownloadResult as SessionWorkspaceDownloadResult,
   CronJob,
   CronRunLogEntry,
   UpdateAvailable,

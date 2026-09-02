@@ -13,10 +13,12 @@ import {
   type SessionFileEntry,
   type SessionFileRelevance,
   type SessionsFilesGetParams,
+  validateSessionsFilesDownloadParams,
   validateSessionsFilesRevealParams,
   validateSessionsFilesGetParams,
   validateSessionsFilesListParams,
   validateSessionsFilesSetParams,
+  validateSessionsFilesUploadParams,
 } from "../../../packages/gateway-protocol/src/index.js";
 import { resolveAgentWorkspaceDir } from "../../agents/agent-scope.js";
 import { resolveToCwd as resolveSessionToolPathToCwd } from "../../agents/sessions/tools/path-utils.js";
@@ -46,6 +48,7 @@ import type { GatewayRequestHandlers, RespondFn } from "./types.js";
 import { assertValidParams } from "./validation.js";
 import {
   decodeUtf8Strict,
+  exportWorkspaceFile,
   listWorkspacePath,
   normalizeRelativePath,
   openWorkspaceRoot,
@@ -59,6 +62,7 @@ import {
   updateWorkspaceFile,
   WORKSPACE_PREVIEW_MAX_BYTES,
   workspaceStatKind,
+  writeWorkspaceFile,
   type WorkspaceDirEntry,
   type WorkspaceFileUpdateResult,
   type WorkspaceRoot,
@@ -1101,6 +1105,159 @@ export const sessionsFilesHandlers: GatewayRequestHandlers = {
       );
       respond(true, { ok: false, path: workspaceRoot, error: detailedError });
     }
+  },
+  "sessions.files.upload": async ({ params, respond, context, sessionMutationAuthorization }) => {
+    if (
+      !assertValidParams(params, validateSessionsFilesUploadParams, "sessions.files.upload", respond)
+    ) {
+      return;
+    }
+    const agentId = requireSessionFilesAgentId({
+      cfg: context.getRuntimeConfig(),
+      sessionKey: params.sessionKey,
+      agentId: params.agentId,
+      respond,
+    });
+    if (!agentId) {
+      return;
+    }
+    const loaded = loadSessionFileRoot({ sessionKey: params.sessionKey, agentId });
+    if (!loaded.root) {
+      respondSessionFileNotFound(respond, params.path);
+      return;
+    }
+    let contentBytes: Buffer;
+    try {
+      contentBytes = Buffer.from(params.base64Content, "base64");
+    } catch {
+      respond(
+        false,
+        undefined,
+        sessionFilesError("session_file_upload_invalid", "upload: base64 content is invalid", {
+          path: params.path,
+        }),
+      );
+      return;
+    }
+    // Node normalizes some inputs while base64-encoding; reject anything that no longer
+    // matches the submitted payload so the size we report is honest.
+    if (contentBytes.toString("base64") !== params.base64Content) {
+      respond(
+        false,
+        undefined,
+        sessionFilesError("session_file_upload_invalid", "upload: base64 content is invalid", {
+          path: params.path,
+        }),
+      );
+      return;
+    }
+    const candidates = resolveSessionFileCandidates({
+      root: loaded.root,
+      fileRoot: loaded.fileRoot,
+      filePath: params.path,
+    });
+    let browserPath: string | undefined;
+    for (const candidate of candidates) {
+      const candidatePath = toDisplayPath(loaded.root, candidate);
+      const stat = await statWorkspacePath(loaded.root, candidatePath);
+      if (stat && workspaceStatKind(stat) !== "directory") {
+        browserPath = candidatePath;
+        break;
+      }
+    }
+    const fallback = candidates[0];
+    if (!browserPath && fallback) {
+      browserPath = toDisplayPath(loaded.root, fallback);
+    }
+    if (!browserPath) {
+      respondSessionFileNotFound(respond, params.path);
+      return;
+    }
+    // Recheck after async path discovery so a replacement cannot redirect this write.
+    sessionMutationAuthorization?.assertCurrent();
+    const result = await writeWorkspaceFile(loaded.root, browserPath, contentBytes);
+    if (result.status === "unsafe") {
+      respondSessionFileUnsafe(respond, params.path);
+      return;
+    }
+    respond(true, {
+      sessionKey: params.sessionKey,
+      path: params.path,
+      size: result.stat.size,
+    });
+  },
+  "sessions.files.download": async ({ params, respond, context }) => {
+    if (
+      !assertValidParams(
+        params,
+        validateSessionsFilesDownloadParams,
+        "sessions.files.download",
+        respond,
+      )
+    ) {
+      return;
+    }
+    const agentId = requireSessionFilesAgentId({
+      cfg: context.getRuntimeConfig(),
+      sessionKey: params.sessionKey,
+      agentId: params.agentId,
+      respond,
+    });
+    if (!agentId) {
+      return;
+    }
+    const loaded = loadSessionFileRoot({ sessionKey: params.sessionKey, agentId });
+    if (!loaded.root) {
+      respondSessionFileNotFound(respond, params.path);
+      return;
+    }
+    const candidates = resolveSessionFileCandidates({
+      root: loaded.root,
+      fileRoot: loaded.fileRoot,
+      filePath: params.path,
+    });
+    let browserPath: string | undefined;
+    for (const candidate of candidates) {
+      const candidatePath = toDisplayPath(loaded.root, candidate);
+      const stat = await statWorkspacePath(loaded.root, candidatePath);
+      if (stat && workspaceStatKind(stat) === "file") {
+        browserPath = candidatePath;
+        break;
+      }
+    }
+    if (!browserPath) {
+      respondSessionFileNotFound(respond, params.path);
+      return;
+    }
+    const result = await exportWorkspaceFile(loaded.root, browserPath);
+    if ("status" in result) {
+      if (result.status === "unsafe") {
+        respondSessionFileUnsafe(respond, params.path);
+      } else {
+        respondSessionFileNotFound(respond, params.path);
+      }
+      return;
+    }
+    const buffer = result.kind === "text" ? Buffer.from(result.content, "utf8") : Buffer.from(result.content);
+    const detected = await detectMime({ buffer });
+    const mimeType = detected ?? (result.kind === "text" ? "text/plain" : "application/octet-stream");
+    if (result.kind === "text") {
+      respond(true, {
+        sessionKey: params.sessionKey,
+        path: params.path,
+        size: buffer.length,
+        mimeType,
+        textContent: result.content,
+      });
+      return;
+    }
+    respond(true, {
+      sessionKey: params.sessionKey,
+      path: params.path,
+      size: result.content.length,
+      mimeType,
+      base64Content: buffer.toString("base64"),
+    });
   },
 };
 /* oxlint-disable max-lines -- TODO: split this grandfathered oversized file. */

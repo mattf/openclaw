@@ -12,9 +12,11 @@ import type {
   SessionsListResult,
   SessionsPatchResult,
   SessionsRewindResult,
+  SessionWorkspaceDownloadResult,
   SessionWorkspaceGetResult,
   SessionWorkspaceListResult,
   SessionWorkspaceSetResult,
+  SessionWorkspaceUploadResult,
 } from "../../api/types.ts";
 import type { SessionPatch } from "./patch.ts";
 import type {
@@ -249,6 +251,35 @@ export function requestSessionFileSet(
     path,
     content,
     expectedHash: options.expectedHash,
+    ...(options.agentId?.trim() ? { agentId: options.agentId.trim() } : {}),
+  });
+}
+
+export function requestSessionFileUpload(
+  client: SessionRequestClient,
+  key: string,
+  path: string,
+  base64Content: string,
+  options: { agentId?: string | null; mimeType?: string } = {},
+): Promise<SessionWorkspaceUploadResult | null> {
+  return client.request<SessionWorkspaceUploadResult | null>("sessions.files.upload", {
+    sessionKey: key,
+    path,
+    base64Content,
+    ...(options.mimeType ? { mimeType: options.mimeType } : {}),
+    ...(options.agentId?.trim() ? { agentId: options.agentId.trim() } : {}),
+  });
+}
+
+export function requestSessionFileDownload(
+  client: SessionRequestClient,
+  key: string,
+  path: string,
+  options: { agentId?: string | null } = {},
+): Promise<SessionWorkspaceDownloadResult | null> {
+  return client.request<SessionWorkspaceDownloadResult | null>("sessions.files.download", {
+    sessionKey: key,
+    path,
     ...(options.agentId?.trim() ? { agentId: options.agentId.trim() } : {}),
   });
 }

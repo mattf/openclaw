@@ -164,6 +164,14 @@ export const icons = {
   folder: strokeIcon(svg` <path
     d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
   />`),
+  folderUp: strokeIcon(svg` <path d="M20 20a2 2 0 0 0 2-2V8l-6-6H4a2 2 0 0 0-2 2v14" />
+    <path d="M20 12v6a2 2 0 0 1-2 2h-8l-3-4H4a2 2 0 0 1-2-2V8" />
+    <line x1="12" x2="12" y1="16" y2="22" />
+    <line x1="9" x2="15" y1="19" y2="13" />`),
+  folderDown: strokeIcon(svg` <path d="M20 20a2 2 0 0 0 2-2V8l-6-6H4a2 2 0 0 0-2 2v14" />
+    <path d="M20 12v6a2 2 0 0 1-2 2h-8l-3-4H4a2 2 0 0 1-2-2V8" />
+    <line x1="12" x2="12" y1="22" y2="16" />
+    <line x1="9" x2="15" y1="13" y2="19" />`),
   kanban: strokeIcon(svg` <rect width="18" height="18" x="3" y="3" rx="2" />
     <path d="M8 7v7" />
     <path d="M12 7v4" />

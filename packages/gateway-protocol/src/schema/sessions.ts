@@ -316,6 +316,39 @@ export const SessionsFilesSetResultSchema = closedObject({
   file: SessionFileEntrySchema,
 });
 
+/** Uploads one file (text or binary) into the session workspace. */
+export const SessionsFilesUploadParamsSchema = closedObject({
+  sessionKey: NonEmptyString,
+  path: NonEmptyString,
+  agentId: Type.Optional(NonEmptyString),
+  base64Content: Type.String(),
+  mimeType: Type.Optional(NonEmptyString),
+});
+
+/** Result of a file upload operation. */
+export const SessionsFilesUploadResultSchema = closedObject({
+  sessionKey: NonEmptyString,
+  path: NonEmptyString,
+  size: Type.Integer({ minimum: 0 }),
+});
+
+/** Downloads one file from the session workspace. */
+export const SessionsFilesDownloadParamsSchema = closedObject({
+  sessionKey: NonEmptyString,
+  path: NonEmptyString,
+  agentId: Type.Optional(NonEmptyString),
+});
+
+/** Result of a file download operation. */
+export const SessionsFilesDownloadResultSchema = closedObject({
+  sessionKey: NonEmptyString,
+  path: NonEmptyString,
+  size: Type.Integer({ minimum: 0 }),
+  mimeType: NonEmptyString,
+  base64Content: Type.Optional(Type.String()),
+  textContent: Type.Optional(Type.String()),
+});
+
 /** Opens a session workspace on the Gateway host without accepting a client path. */
 export const SessionsFilesRevealParamsSchema = closedObject({
   key: NonEmptyString,
@@ -869,6 +902,10 @@ export type SessionsFilesGetParams = Static<typeof SessionsFilesGetParamsSchema>
 export type SessionsFilesGetResult = Static<typeof SessionsFilesGetResultSchema>;
 export type SessionsFilesSetParams = Static<typeof SessionsFilesSetParamsSchema>;
 export type SessionsFilesSetResult = Static<typeof SessionsFilesSetResultSchema>;
+export type SessionsFilesUploadParams = Static<typeof SessionsFilesUploadParamsSchema>;
+export type SessionsFilesUploadResult = Static<typeof SessionsFilesUploadResultSchema>;
+export type SessionsFilesDownloadParams = Static<typeof SessionsFilesDownloadParamsSchema>;
+export type SessionsFilesDownloadResult = Static<typeof SessionsFilesDownloadResultSchema>;
 export type SessionsFilesRevealParams = Static<typeof SessionsFilesRevealParamsSchema>;
 export type SessionsFilesRevealResult = Static<typeof SessionsFilesRevealResultSchema>;
 export type SessionDiffFileStatus = Static<typeof SessionDiffFileStatusSchema>;

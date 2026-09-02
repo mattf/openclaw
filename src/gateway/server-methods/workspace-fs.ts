@@ -192,6 +192,79 @@ export async function updateWorkspaceFile(
   });
 }
 
+export type WorkspaceFileExportResult =
+  | { kind: "text"; content: string }
+  | { kind: "binary"; content: Uint8Array }
+  | { status: "missing" }
+  | { status: "unsafe" };
+
+export async function exportWorkspaceFile(
+  rootDir: string,
+  browserPath: string,
+): Promise<WorkspaceFileExportResult> {
+  const workspaceRoot = await openWorkspaceRoot(rootDir);
+  if (!workspaceRoot) {
+    return { status: "unsafe" };
+  }
+  try {
+    const opened = await workspaceRoot.open(browserPath, {
+      hardlinks: "reject",
+      symlinks: "reject",
+    });
+    try {
+      const stat = opened.stat;
+      const isDirectory =
+        typeof stat.isDirectory === "function" ? stat.isDirectory() : stat.isDirectory;
+      if (isDirectory) {
+        return { status: "unsafe" };
+      }
+      const buffer = Buffer.allocUnsafe(stat.size);
+      const bytesRead = await readFileWindowFully(opened.handle, buffer, 0);
+      const data = buffer.subarray(0, bytesRead);
+      const decoded = decodeUtf8Strict(data);
+      if (decoded !== undefined) {
+        return { kind: "text", content: decoded };
+      }
+      return { kind: "binary", content: data };
+    } finally {
+      await opened.handle.close();
+    }
+  } catch {
+    return { status: "missing" };
+  }
+}
+
+export async function writeWorkspaceFile(
+  rootDir: string,
+  browserPath: string,
+  content: Buffer,
+): Promise<{ status: "written"; stat: WorkspacePathStat } | { status: "unsafe" }> {
+  const workspaceRoot = await openWorkspaceRoot(rootDir);
+  if (!workspaceRoot) {
+    return { status: "unsafe" };
+  }
+  return await enqueueWorkspaceFileUpdate(async () => {
+    try {
+      await workspaceRoot.write(browserPath, content, {
+        renameIdentity: "strict",
+      });
+      const stat = await workspaceRoot.stat(browserPath);
+      if (workspaceStatKind(stat) !== "file") {
+        return { status: "unsafe" as const };
+      }
+      return {
+        status: "written" as const,
+        stat,
+      };
+    } catch (err) {
+      if (err instanceof FsSafeError) {
+        return { status: "unsafe" as const };
+      }
+      throw err;
+    }
+  });
+}
+
 export function decodeUtf8Strict(buffer: Buffer): string | undefined {
   // NUL bytes are valid UTF-8 but mark binary payloads we refuse to inline.
   if (buffer.includes(0)) {

@@ -33,6 +33,8 @@ import {
   requestSessionCheckpoints,
   requestSessionCompact,
   requestSessionFile,
+  requestSessionFileDownload,
+  requestSessionFileUpload,
   requestSessionFilesList,
   requestSessionFileSet,
   requestSessionFork,
@@ -48,6 +50,33 @@ type SessionScopedOperationsHost = {
 };
 
 const retiredFailedSubscriptionRecoveries = new WeakSet<AggregateError>();
+
+function fileToBase64(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = typeof reader.result === "string" ? reader.result.split(",")[1] : undefined;
+      if (base64) {
+        resolve(base64);
+      } else {
+        reject(new Error("Failed to convert file to base64"));
+      }
+    };
+    reader.onerror = () => reject(new Error("FileReader error"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function triggerBrowserDownload(fileName: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 export function createSessionScopedOperations(host: SessionScopedOperationsHost) {
   const ownedSubscriptions = new Set<SessionMessageSubscription>();
@@ -125,6 +154,57 @@ export function createSessionScopedOperations(host: SessionScopedOperationsHost)
     }
     const result = await requestSessionFileSet(scope.client, key, path, content, options);
     return host.connection.isCurrent(scope) ? result : null;
+  };
+
+  const uploadFile = async (
+    key: string,
+    options: { file: File; agentId?: string | null },
+  ): Promise<boolean> => {
+    const scope = host.connection.capture();
+    if (!scope) {
+      return false;
+    }
+    const fileName = options.file.name?.replace(/\\/g, "/") || "unnamed";
+    const path = options.file.webkitRelativePath || fileName;
+    try {
+      const content = await fileToBase64(options.file);
+      const result = await requestSessionFileUpload(scope.client, key, path, content, {
+        agentId: options.agentId,
+      });
+      return host.connection.isCurrent(scope) && result !== null;
+    } catch {
+      return false;
+    }
+  };
+
+  const downloadFile = async (
+    key: string,
+    filePath: string,
+    options: { agentId?: string | null } = {},
+  ): Promise<boolean> => {
+    const scope = host.connection.capture();
+    if (!scope) {
+      return false;
+    }
+    try {
+      const result = await requestSessionFileDownload(scope.client, key, filePath, options);
+      if (!host.connection.isCurrent(scope) || !result) {
+        return false;
+      }
+      const fileName = filePath.split("/").pop() || "download";
+      if (result.base64Content) {
+        const bytes = Uint8Array.from(atob(result.base64Content), (c) => c.charCodeAt(0));
+        triggerBrowserDownload(
+          fileName,
+          new Blob([bytes], { type: result.mimeType || "application/octet-stream" }),
+        );
+      } else if (result.textContent !== undefined) {
+        triggerBrowserDownload(fileName, new Blob([result.textContent], { type: "text/plain;charset=utf-8" }));
+      }
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   const unsubscribeMessages = async (subscription: SessionMessageSubscription): Promise<void> => {
@@ -292,6 +372,7 @@ export function createSessionScopedOperations(host: SessionScopedOperationsHost)
   return {
     branchCheckpoint,
     compact,
+    downloadFile,
     forkAtMessage,
     getFile,
     listBranches,
@@ -303,6 +384,7 @@ export function createSessionScopedOperations(host: SessionScopedOperationsHost)
     setFile,
     subscribeMessages,
     switchBranch,
+    uploadFile,
     unsubscribeMessages,
     retireConnection(previousClient: GatewayBrowserClient | null) {
       if (previousClient) {

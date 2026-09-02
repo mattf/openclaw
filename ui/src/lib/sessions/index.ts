@@ -639,6 +639,8 @@ export function createSessionCapability(gateway: SessionGateway): SessionCapabil
     listFiles: operations.listFiles,
     getFile: operations.getFile,
     setFile: operations.setFile,
+    uploadFile: operations.uploadFile,
+    downloadFile: operations.downloadFile,
     subscribeMessages: operations.subscribeMessages,
     unsubscribeMessages: operations.unsubscribeMessages,
     listCheckpoints: operations.listCheckpoints,

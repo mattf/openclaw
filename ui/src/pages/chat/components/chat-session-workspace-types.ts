@@ -5,6 +5,8 @@ import type { SessionCapability, SessionScopeHost } from "../../../lib/sessions/
 import type { SidebarContent } from "./chat-sidebar.ts";
 
 export type SessionWorkspaceProps = {
+  capability: SessionCapability;
+  capabilityAgentId: string;
   collapsed: boolean;
   sessionKey: string;
   list: SessionWorkspaceListResult | null;
@@ -22,6 +24,7 @@ export type SessionWorkspaceProps = {
   onOpenFile: (path: string, origin: "session" | "workspace") => void;
   onSearch: (search: string) => void;
   onOpenArtifact: (artifactId: string) => void;
+  uploadFile?: () => Promise<void>;
   onToggleTerminal?: () => void;
   onToggleBrowser?: () => void;
   onToggleDesktop?: () => void;

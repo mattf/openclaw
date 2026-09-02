@@ -471,6 +471,8 @@ export function createSessionWorkspaceProps(
   }
   const diffContent = resolveSessionDiffSidebarContent(state);
   return {
+    capability: state.sessions,
+    capabilityAgentId: workspace.agentId,
     collapsed: options?.expanded === true ? false : workspace.collapsed,
     sessionKey: state.sessionKey,
     list: workspace.list?.sessionKey === state.sessionKey ? workspace.list : null,
@@ -506,6 +508,28 @@ export function createSessionWorkspaceProps(
       }, 160);
     },
     onOpenArtifact: (artifactId) => openArtifact(state, workspace, artifactId),
+    uploadFile: async () => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.multiple = true;
+      input.onchange = () => {
+        const files = input.files;
+        if (!files) {
+          return;
+        }
+        void Promise.all(
+          Array.from(files).map((file) =>
+            state.sessions.uploadFile(state.sessionKey, {
+              file,
+              agentId: workspace.agentId,
+            }),
+          ),
+        ).then(() => {
+          loadSessionWorkspace(state, workspace, true);
+        });
+      };
+      input.click();
+    },
     onOpenDiff: diffContent ? () => openSessionCheckoutSidebar(state, diffContent) : undefined,
   };
 }
