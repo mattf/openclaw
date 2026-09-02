@@ -9,6 +9,12 @@ vi.mock("../plugins/manifest-contract-eligibility.js", async (importOriginal) =>
   loadManifestMetadataSnapshot,
 }));
 
+const mockDiscoverOpenAICompatibleLocalModels = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+vi.mock("../plugins/provider-self-hosted-discovery.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../plugins/provider-self-hosted-discovery.js")>()),
+  discoverOpenAICompatibleLocalModels: mockDiscoverOpenAICompatibleLocalModels,
+}));
+
 vi.mock("../plugins/current-plugin-metadata-snapshot.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../plugins/current-plugin-metadata-snapshot.js")>()),
   getCurrentPluginMetadataSnapshot: () => ({ plugins: [] }),
@@ -104,6 +110,8 @@ describe("promptCustomApiConfig", () => {
   beforeEach(() => {
     loadManifestMetadataSnapshot.mockReset();
     loadManifestMetadataSnapshot.mockReturnValue({ plugins: [] });
+    mockDiscoverOpenAICompatibleLocalModels.mockReset();
+    mockDiscoverOpenAICompatibleLocalModels.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -328,7 +336,7 @@ describe("promptCustomApiConfig", () => {
 
     await runPromptCustomApi(prompter);
 
-    expect(prompter.progress.mock.results[0]?.value.stop).toHaveBeenCalledWith(
+    expect(prompter.progress.mock.results[1]?.value.stop).toHaveBeenCalledWith(
       expect.stringContaining("usually need a /v1 path prefix"),
     );
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://proxy.example.com/chat/completions");
@@ -412,5 +420,86 @@ describe("promptCustomApiConfig", () => {
     await promise;
 
     expect(prompter.text).toHaveBeenCalledTimes(6);
+  });
+
+  it("presents a select list when openai compat discovery returns models", async () => {
+    mockDiscoverOpenAICompatibleLocalModels.mockResolvedValueOnce([
+      { id: "llama3" },
+      { id: "mistral-7b" },
+    ]);
+    const prompter = createTestPrompter({
+      text: ["http://localhost:11434/v1", "", "custom", ""],
+      select: ["plaintext", "openai", "llama3"],
+    });
+    stubFetchSequence([{ ok: true }]);
+
+    const result = await runPromptCustomApi(prompter);
+
+    expect(prompter.select).toHaveBeenCalledTimes(3);
+    expect(prompter.select).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "Select a model" }),
+    );
+    expect(result.config.models?.providers?.custom?.models?.some((m) => m.id === "llama3")).toBe(
+      true,
+    );
+  });
+
+  it("falls back to manual entry when user picks 'Enter model ID manually...'", async () => {
+    mockDiscoverOpenAICompatibleLocalModels.mockResolvedValueOnce([{ id: "llama3" }]);
+    const prompter = createTestPrompter({
+      text: ["http://localhost:11434/v1", "", "my-custom-model", "custom", ""],
+      select: ["plaintext", "openai", "__manual__"],
+    });
+    stubFetchSequence([{ ok: true }]);
+
+    const result = await runPromptCustomApi(prompter);
+
+    expect(prompter.select).toHaveBeenCalledTimes(3);
+    expect(
+      result.config.models?.providers?.custom?.models?.some((m) => m.id === "my-custom-model"),
+    ).toBe(true);
+  });
+
+  it("falls back to text prompt when discovery returns empty for openai compat", async () => {
+    const prompter = createTestPrompter({
+      text: ["http://localhost:11434/v1", "", "fallback-model", "custom", ""],
+      select: ["plaintext", "openai"],
+    });
+    stubFetchSequence([{ ok: true }]);
+
+    const result = await runPromptCustomApi(prompter);
+
+    expectOpenAiCompatResult({ prompter, textCalls: 5, selectCalls: 2, result });
+    expect(
+      result.config.models?.providers?.custom?.models?.some((m) => m.id === "fallback-model"),
+    ).toBe(true);
+  });
+
+  it("falls back to text prompt when discovery throws for openai compat", async () => {
+    mockDiscoverOpenAICompatibleLocalModels.mockRejectedValueOnce(new Error("network error"));
+    const prompter = createTestPrompter({
+      text: ["http://localhost:11434/v1", "", "fallback-model", "custom", ""],
+      select: ["plaintext", "openai"],
+    });
+    stubFetchSequence([{ ok: true }]);
+
+    const result = await runPromptCustomApi(prompter);
+
+    expectOpenAiCompatResult({ prompter, textCalls: 5, selectCalls: 2, result });
+    expect(
+      result.config.models?.providers?.custom?.models?.some((m) => m.id === "fallback-model"),
+    ).toBe(true);
+  });
+
+  it("does not attempt discovery for anthropic compat", async () => {
+    const prompter = createTestPrompter({
+      text: ["http://localhost:11434/v1", "", "claude-3-sonnet", "custom", ""],
+      select: ["plaintext", "anthropic"],
+    });
+    stubFetchSequence([{ ok: true }]);
+
+    await runPromptCustomApi(prompter);
+
+    expect(mockDiscoverOpenAICompatibleLocalModels).not.toHaveBeenCalled();
   });
 });

@@ -21,6 +21,7 @@ import {
 } from "../../auth-choice-legacy.js";
 import { formatAuthChoiceChoicesForCli } from "../../auth-choice-options.js";
 import { normalizeApiKeyTokenProviderAuthChoice } from "../../auth-choice.apply.api-providers.js";
+import { discoverOpenAICompatibleLocalModels } from "../../../plugins/provider-self-hosted-discovery.js";
 import type { OnboardingAgentTarget } from "../../onboard-agent-target.js";
 import {
   applyCustomApiConfig,
@@ -273,10 +274,50 @@ export async function applyNonInteractiveAuthChoice(params: {
         }
         customApiKeyInput = stored;
       }
+      if (customAuth.modelId === undefined) {
+        // Discovery path: openai compat with no --custom-model-id supplied.
+        const discovered = await discoverOpenAICompatibleLocalModels({
+          baseUrl: customAuth.baseUrl,
+          apiKey: resolvedCustomApiKey?.key || undefined,
+          label: "custom",
+        });
+        if (discovered.length === 0) {
+          rejectOnboardingOption(
+            opts,
+            runtime,
+            [
+              "No models discovered from the custom provider endpoint.",
+              "Use --custom-model-id to specify a model ID explicitly.",
+            ].join("\n"),
+          );
+          return null;
+        }
+        // Add models in reverse order so the first discovered model becomes primary.
+        let config = nextConfig;
+        for (const model of [...discovered].reverse()) {
+          const discResult = applyCustomApiConfig({
+            config,
+            baseUrl: customAuth.baseUrl,
+            modelId: model.id,
+            compatibility: customAuth.compatibility,
+            apiKey: customApiKeyInput,
+            providerId: customAuth.providerId,
+            supportsImageInput: customAuth.supportsImageInput,
+            target: params.target,
+          });
+          if (discResult.providerIdRenamedFrom && discResult.providerId) {
+            runtime.log(
+              `Custom provider ID "${discResult.providerIdRenamedFrom}" already exists for a different base URL. Using "${discResult.providerId}".`,
+            );
+          }
+          config = discResult.config;
+        }
+        return config;
+      }
       const result = applyCustomApiConfig({
         config: nextConfig,
         baseUrl: customAuth.baseUrl,
-        modelId: customAuth.modelId,
+        modelId: customAuth.modelId!,
         compatibility: customAuth.compatibility,
         apiKey: customApiKeyInput,
         providerId: customAuth.providerId,

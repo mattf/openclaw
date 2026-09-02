@@ -752,10 +752,19 @@ describe("parseNonInteractiveCustomApiFlags", () => {
     expect(result.compatibility).toBe("openai-responses");
   });
 
+  it("allows openai compat without a model id (discovery path)", () => {
+    const result = parseNonInteractiveCustomApiFlags({
+      baseUrl: "https://llm.example.com/v1",
+    });
+
+    expect(result.modelId).toBeUndefined();
+    expect(result.compatibility).toBe("openai");
+  });
+
   it.each([
     {
-      name: "missing required flags",
-      flags: { baseUrl: "https://llm.example.com/v1" },
+      name: "missing model id for non-openai compatibility",
+      flags: { baseUrl: "https://llm.example.com/v1", compatibility: "anthropic" },
       expectedMessage: 'Auth choice "custom-api-key" requires a base URL and model ID.',
     },
     {

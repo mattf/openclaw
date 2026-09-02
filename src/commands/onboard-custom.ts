@@ -8,6 +8,7 @@ import type { OpenClawConfig } from "../config/types.openclaw.js";
 import type { SecretInput } from "../config/types.secrets.js";
 import { loadManifestMetadataSnapshot } from "../plugins/manifest-contract-eligibility.js";
 import { ensureApiKeyFromEnvOrPrompt } from "../plugins/provider-auth-input.js";
+import { discoverOpenAICompatibleLocalModels } from "../plugins/provider-self-hosted-discovery.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { fetchWithTimeout } from "../utils/fetch-timeout.js";
 import { normalizeSecretInput } from "../utils/normalize-secret-input.js";
@@ -209,6 +210,44 @@ async function promptCustomApiModelId(prompter: WizardPrompter): Promise<string>
   ).trim();
 }
 
+async function promptDiscoverOrEnterModelId(
+  prompter: WizardPrompter,
+  baseUrl: string,
+  resolvedApiKey: string,
+): Promise<string> {
+  const spinner = prompter.progress("Discovering available models...");
+  let discovered: Array<{ id: string }> = [];
+  try {
+    discovered = await discoverOpenAICompatibleLocalModels({
+      baseUrl,
+      apiKey: resolvedApiKey || undefined,
+      label: "custom",
+    });
+  } catch {
+    // Fall through to manual entry when discovery fails.
+  }
+  spinner.stop(
+    discovered.length > 0
+      ? `Discovered ${discovered.length} model${discovered.length === 1 ? "" : "s"}.`
+      : "Could not discover models.",
+  );
+  if (discovered.length === 0) {
+    return promptCustomApiModelId(prompter);
+  }
+  const MANUAL_ENTRY = "__manual__";
+  const choice = await prompter.select({
+    message: "Select a model",
+    options: [
+      ...discovered.map((model) => ({ value: model.id, label: model.id })),
+      { value: MANUAL_ENTRY, label: "Enter model ID manually..." },
+    ],
+  });
+  if (choice === MANUAL_ENTRY) {
+    return promptCustomApiModelId(prompter);
+  }
+  return choice;
+}
+
 async function applyCustomApiRetryChoice(params: {
   prompter: WizardPrompter;
   config: OpenClawConfig;
@@ -268,7 +307,10 @@ export async function promptCustomApiConfig(params: {
     })),
   });
 
-  let modelId = await promptCustomApiModelId(prompter);
+  let modelId =
+    compatibilityChoice === "openai"
+      ? await promptDiscoverOrEnterModelId(prompter, baseUrl, resolvedApiKey)
+      : await promptCustomApiModelId(prompter);
 
   let compatibility: CustomApiCompatibility | null =
     compatibilityChoice === "unknown" ? null : compatibilityChoice;
