@@ -208,6 +208,7 @@ type DefinePluginEntryOptions = {
   reload?: OpenClawPluginDefinition["reload"];
   nodeHostCommands?: OpenClawPluginDefinition["nodeHostCommands"];
   securityAuditCollectors?: OpenClawPluginDefinition["securityAuditCollectors"];
+  manifestModelCatalog?: OpenClawPluginDefinition["manifestModelCatalog"];
   register: NonNullable<OpenClawPluginDefinition["register"]>;
 };
 
@@ -215,6 +216,9 @@ type DefinePluginEntryOptions = {
 type DefinedPluginEntry = Omit<DefinePluginEntryOptions, "configSchema"> & {
   configSchema: OpenClawPluginConfigSchema;
 };
+
+export type PluginEntryManifestModelCatalog =
+  DefinePluginEntryOptions["manifestModelCatalog"];
 
 /**
  * Canonical entry helper for non-channel plugins.
@@ -232,6 +236,7 @@ export function definePluginEntry({
   reload,
   nodeHostCommands,
   securityAuditCollectors,
+  manifestModelCatalog,
   register,
 }: DefinePluginEntryOptions): DefinedPluginEntry {
   const getConfigSchema = createCachedLazyValueGetter(configSchema);
@@ -243,6 +248,7 @@ export function definePluginEntry({
     ...(reload ? { reload } : {}),
     ...(nodeHostCommands ? { nodeHostCommands } : {}),
     ...(securityAuditCollectors ? { securityAuditCollectors } : {}),
+    ...(manifestModelCatalog ? { manifestModelCatalog } : {}),
     get configSchema() {
       return getConfigSchema();
     },

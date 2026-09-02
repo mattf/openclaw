@@ -25,6 +25,16 @@ export type OpenClawPluginDefinition = {
   nodeHostCommands?: OpenClawPluginNodeHostCommand[];
   securityAuditCollectors?: OpenClawPluginSecurityAuditCollector[];
   register?: (api: OpenClawPluginApi) => void;
+  manifestModelCatalog?: () => Promise<{
+    entries: Array<{
+      id: string;
+      name: string;
+      provider: string;
+      contextWindow?: number;
+      reasoning?: boolean;
+      input?: ("text" | "image" | "audio" | "video" | "document")[];
+    }>;
+  }>;
 };
 
 export type OpenClawPluginModule = OpenClawPluginDefinition | ((api: OpenClawPluginApi) => void);
