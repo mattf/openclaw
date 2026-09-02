@@ -71,9 +71,14 @@ export function applyNonInteractiveGatewayConfig(params: {
   if (
     explicitAuthMode !== undefined &&
     explicitAuthMode !== "token" &&
-    explicitAuthMode !== "password"
+    explicitAuthMode !== "password" &&
+    explicitAuthMode !== "trusted-proxy"
   ) {
-    rejectOnboardingOption(opts, runtime, 'Invalid --gateway-auth. Use "token" or "password".');
+    rejectOnboardingOption(
+      opts,
+      runtime,
+      'Invalid --gateway-auth. Use "token", "password", or "trusted-proxy".',
+    );
     return null;
   }
   const hasExplicitTokenAuthInput =
@@ -260,6 +265,66 @@ export function applyNonInteractiveGatewayConfig(params: {
         },
       },
     };
+  }
+
+  if (authMode === "trusted-proxy") {
+    const parseList = (raw: string | string[] | undefined): string[] => {
+      if (!raw) {
+        return [];
+      }
+      if (Array.isArray(raw)) {
+        return raw
+          .flatMap((s) => s.split(","))
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+      return raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    };
+
+    const trustedProxies = parseList(opts.gatewayTrustedProxies);
+    if (trustedProxies.length === 0) {
+      runtime.error("--gateway-trusted-proxies is required for trusted-proxy auth.");
+      runtime.exit(1);
+      return null;
+    }
+
+    const userHeader = (opts.gatewayTrustedProxyUserHeader ?? "x-forwarded-user").trim();
+    const requiredHeaders = parseList(opts.gatewayTrustedProxyRequiredHeaders);
+    const allowUsers = parseList(opts.gatewayTrustedProxyAllowUsers);
+
+    nextConfig = {
+      ...nextConfig,
+      gateway: {
+        ...nextConfig.gateway,
+        auth: {
+          ...nextConfig.gateway?.auth,
+          mode: "trusted-proxy",
+          trustedProxy: {
+            userHeader,
+            ...(requiredHeaders.length > 0 ? { requiredHeaders } : {}),
+            ...(allowUsers.length > 0 ? { allowUsers } : {}),
+          },
+        },
+        trustedProxies,
+      },
+    };
+
+    const allowedOrigins = parseList(opts.gatewayControlUiAllowedOrigins);
+    if (allowedOrigins.length > 0) {
+      nextConfig = {
+        ...nextConfig,
+        gateway: {
+          ...nextConfig.gateway,
+          controlUi: {
+            ...nextConfig.gateway?.controlUi,
+            allowedOrigins,
+          },
+        },
+      };
+    }
   }
 
   nextConfig = {

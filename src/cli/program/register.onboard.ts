@@ -152,13 +152,33 @@ export function registerOnboardGatewayOptions(command: Command): Command {
   return command
     .option("--gateway-port <port>", "Gateway port")
     .option("--gateway-bind <mode>", "Gateway bind: loopback|tailnet|lan|auto|custom")
-    .option("--gateway-auth <mode>", "Gateway auth: token|password")
+    .option("--gateway-auth <mode>", "Gateway auth: token|password|trusted-proxy")
     .option("--gateway-token <token>", "Gateway token (token auth)")
     .option(
       "--gateway-token-ref-env <name>",
       "Gateway token SecretRef env var name (token auth; e.g. OPENCLAW_GATEWAY_TOKEN)",
     )
-    .option("--gateway-password <password>", "Gateway password (password auth)");
+    .option("--gateway-password <password>", "Gateway password (password auth)")
+    .option(
+      "--gateway-trusted-proxies <list>",
+      "Comma-separated trusted proxy IP/CIDR list (trusted-proxy auth)",
+    )
+    .option(
+      "--gateway-trusted-proxy-user-header <header>",
+      "Header conveying authenticated user identity (default: x-forwarded-user)",
+    )
+    .option(
+      "--gateway-trusted-proxy-required-headers <list>",
+      "Comma-separated headers the proxy must supply (trusted-proxy auth)",
+    )
+    .option(
+      "--gateway-trusted-proxy-allow-users <list>",
+      "Comma-separated allowed user identities (trusted-proxy auth)",
+    )
+    .option(
+      "--gateway-controlui-allowed-origins <list>",
+      "Comma-separated allowed origins for the Control UI",
+    );
 }
 
 export function registerOnboardRemoteOptions(command: Command): Command {
@@ -253,6 +273,11 @@ export async function resolveOnboardCommandOptions(
     gatewayToken: readStringValue(opts.gatewayToken),
     gatewayTokenRefEnv: readStringValue(opts.gatewayTokenRefEnv),
     gatewayPassword: readStringValue(opts.gatewayPassword),
+    gatewayTrustedProxies: readStringValue(opts.gatewayTrustedProxies),
+    gatewayTrustedProxyUserHeader: readStringValue(opts.gatewayTrustedProxyUserHeader),
+    gatewayTrustedProxyRequiredHeaders: readStringValue(opts.gatewayTrustedProxyRequiredHeaders),
+    gatewayTrustedProxyAllowUsers: readStringValue(opts.gatewayTrustedProxyAllowUsers),
+    gatewayControlUiAllowedOrigins: readStringValue(opts.gatewayControlUiAllowedOrigins),
     remoteUrl: readStringValue(opts.remoteUrl),
     remoteToken: readStringValue(opts.remoteToken),
     remotePassword: readStringValue(opts.remotePassword),
