@@ -127,6 +127,17 @@ describe("isContextOverflowError", () => {
     }
   });
 
+  it("matches OpenAI-compatible 'context length is only' overflow errors", () => {
+    const samples = [
+      "You passed 128000 input tokens and requested 1 output tokens. However, the model's context length is only 128000 tokens, resulting in a maximum input length of 127999 tokens. Please reduce the length of the input prompt. (parameter=input_tokens, value=128000)",
+      "the model's context length is only 32000 tokens",
+      '{"error":{"message":"the model\'s context length is only 32000 tokens","type":"BadRequestError","param":"input_tokens","code":400}}',
+    ];
+    for (const sample of samples) {
+      expect(isContextOverflowError(sample)).toBe(true);
+    }
+  });
+
   it("ignores normal conversation text mentioning context overflow", () => {
     // These are legitimate conversation snippets, not error messages.
     expect(isContextOverflowError("Let's investigate the context overflow bug")).toBe(false);

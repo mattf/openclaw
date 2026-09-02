@@ -78,6 +78,7 @@ const FAILOVER_EXPLICIT_OVERFLOW_PATTERNS = [
   /invalid_argument[\s\S]*maximum number of tokens/i, // Google/Vertex
   /request exceeds the maximum size/i, // Anthropic
   /context length exceeded/i,
+  /context length is only/i, // OpenAI-compatible (e.g. LiteLLM): "the model's context length is only N tokens"
   /maximum context length/i,
   /prompt is too long/i,
   /prompt too long/i,
