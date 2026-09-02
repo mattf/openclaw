@@ -87,6 +87,7 @@ export const en: TranslationMap = {
     settingsSections: "Settings sections",
     version: "Version",
     docs: "Docs",
+    files: "Files",
     learnMore: "Learn more",
     colorMode: "Color mode",
     colorModeOption: "Color mode: {mode}",
@@ -5379,6 +5380,7 @@ export const en: TranslationMap = {
     },
   },
   chat: {
+    browseFiles: "Browse workspace files",
     cloudWorkerFailed: "Runner failed: {error}",
     errorDetails: "Error details",
     copyError: "Copy error",

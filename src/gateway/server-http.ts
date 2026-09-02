@@ -8,6 +8,7 @@ import {
 } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
 import type { TlsOptions } from "node:tls";
+import { resolveWorkspaceRoot } from "../agents/workspace-dir.js";
 import { isCoreCanvasHostEnabled } from "../canvas/config.js";
 import { isCanvasDocumentHttpPath } from "../canvas/constants.js";
 import { getRuntimeConfig } from "../config/io.js";
@@ -84,6 +85,7 @@ import {
   handleWorkerBootstrapArtifactTransferHttpRequest,
   type WorkerBootstrapArtifactTransferHttpCallback,
 } from "./worker-environments/worker-bootstrap-artifact-transfer-http.js";
+import { handleWorkspaceBrowseRequest } from "./workspace-browse-http.js";
 
 type PluginHttpRequestHandler = (
   req: IncomingMessage,
@@ -682,6 +684,18 @@ export function createGatewayHttpServer(opts: {
       );
       addRequestStage(controlUiEnabled, async () =>
         (await getControlUiModule()).handleControlUiAvatarRequest(req, res, controlUiRouteOptions),
+      );
+      addRequestStage(
+        controlUiEnabled,
+        () =>
+          handleWorkspaceBrowseRequest(req, res, {
+            basePath: controlUiBasePath,
+            workspaceDir: resolveWorkspaceRoot(configSnapshot.agents?.defaults?.workspace),
+            resolvedAuth: resolvedAuthValue,
+            trustedProxies,
+            allowRealIpFallback,
+            rateLimiter,
+          }),
       );
       addRequestStage(controlUiEnabled, handleControlUiRequest);
 

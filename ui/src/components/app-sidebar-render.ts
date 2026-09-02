@@ -401,6 +401,17 @@ export function renderAppSidebarFooterBar(host: AppSidebarRenderHost) {
               </button></openclaw-tooltip
             >`
           : nothing}
+        <openclaw-tooltip .content=${t("chat.browseFiles")}>
+          <a
+            class="sidebar-brand__icon"
+            href=${`${host.basePath}/workspace/`}
+            target="_blank"
+            rel="noopener"
+            aria-label=${t("common.files")}
+          >
+            ${icons.folder}
+          </a>
+        </openclaw-tooltip>
         ${renderAppSidebarAttention(host)}
       </span>
     </div>
