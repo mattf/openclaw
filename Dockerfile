@@ -185,10 +185,9 @@ COPY --from=production-deps /app/ ./
 # manifest so every runtime surface keeps the version used during the build.
 COPY --from=build /app/package.json ./package.json
 
-# Prune omitted plugins and build metadata. Keep SDK-native binaries only for
-# selected plugins that explicitly require them.
-RUN OPENCLAW_EXTENSIONS="$(cat /tmp/openclaw-selected-plugin-dirs)" OPENCLAW_BUNDLED_PLUGIN_DIR="$OPENCLAW_BUNDLED_PLUGIN_DIR" node scripts/prune-docker-plugin-dist.mjs && \
-    node scripts/postinstall-bundled-plugins.mjs && \
+# Postinstall bundled plugins and strip build metadata. All bundled plugin dists
+# are retained (the prune step is skipped so any configured plugin resolves).
+RUN node scripts/postinstall-bundled-plugins.mjs && \
     find dist -type f \( -name '*.d.ts' -o -name '*.d.mts' -o -name '*.d.cts' -o -name '*.map' \) -delete && \
     if [ -L /app/node_modules/@openclaw/ai ]; then \
       ai_runtime_target="$(readlink -f /app/node_modules/@openclaw/ai)" && \
