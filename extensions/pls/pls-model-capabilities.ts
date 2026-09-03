@@ -23,7 +23,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { formatErrorMessage } from "openclaw/plugin-sdk/agent-harness";
+import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import { createSubsystemLogger } from "openclaw/plugin-sdk/logging-core";
 import { resolveStateDir } from "openclaw/plugin-sdk/state-paths";
 
