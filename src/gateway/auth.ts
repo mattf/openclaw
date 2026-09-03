@@ -507,6 +507,11 @@ async function authorizeGatewayConnectCore(
         resetOnSuccess,
       });
     }
+    // Same-host CLI access: accept a dedicated localToken from loopback connections
+    // that carry no forwarded headers (the CLI connecting directly, not via proxy).
+    if (localDirect && auth.localToken && connectAuth?.token === auth.localToken) {
+      return { ok: true, method: "token" };
+    }
     return { ok: false, reason: result.reason };
   }
 

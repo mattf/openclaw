@@ -1644,9 +1644,12 @@ describe("trusted-proxy auth", () => {
       connectToken?: string;
       password?: string;
       connectPassword?: string;
+      localToken?: string;
       rateLimiter?: AuthRateLimiter;
       trustedProxy?: GatewayConnectInput["auth"]["trustedProxy"];
       trustedProxies?: string[];
+      remoteAddress?: string;
+      remoteHost?: string;
     }) {
       return authorizeHttpGatewayConnect({
         auth: {
@@ -1657,6 +1660,7 @@ describe("trusted-proxy auth", () => {
             : { trustedProxy: trustedProxyConfig }),
           token: options?.token,
           password: options?.password, // pragma: allowlist secret
+          localToken: options?.localToken,
         },
         connectAuth:
           options?.connectToken || options?.connectPassword
@@ -1665,8 +1669,8 @@ describe("trusted-proxy auth", () => {
         rateLimiter: options?.rateLimiter,
         trustedProxies: options?.trustedProxies ?? ["127.0.0.1"],
         req: {
-          socket: { remoteAddress: "127.0.0.1" },
-          headers: { host: "localhost" },
+          socket: { remoteAddress: options?.remoteAddress ?? "127.0.0.1" },
+          headers: { host: options?.remoteHost ?? "localhost" },
         } as never,
       });
     }
@@ -1702,6 +1706,40 @@ describe("trusted-proxy auth", () => {
       const res = await authorizeLocalDirect(options);
       expect(res.ok).toBe(false);
       expect(res.reason).toBe("trusted_proxy_loopback_source");
+    });
+
+    it("accepts local-direct request with matching localToken (CLI access)", async () => {
+      const res = await authorizeLocalDirect({
+        localToken: "cli-secret",
+        connectToken: "cli-secret",
+      });
+
+      expect(res.ok).toBe(true);
+      expect(res.method).toBe("token");
+    });
+
+    it("rejects local-direct request with wrong localToken", async () => {
+      const res = await authorizeLocalDirect({
+        localToken: "cli-secret",
+        connectToken: "wrong-secret",
+      });
+
+      expect(res.ok).toBe(false);
+      expect(res.reason).toBe("trusted_proxy_loopback_source");
+    });
+
+    it("rejects localToken from a non-local (non-loopback) remote address", async () => {
+      const res = await authorizeLocalDirect({
+        localToken: "cli-secret",
+        connectToken: "cli-secret",
+        trustedProxies: ["10.0.0.1"],
+        remoteAddress: "10.0.0.1",
+        remoteHost: "gateway.local",
+      });
+
+      expect(res.ok).toBe(false);
+      // trusted-proxy auth fails before the localToken check (not a local-direct request)
+      expect(res.reason).toBe("trusted_proxy_missing_header_x-forwarded-proto");
     });
 
     it("accepts local-direct password fallback when trusted-proxy auth fails", async () => {

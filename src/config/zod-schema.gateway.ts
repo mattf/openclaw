@@ -148,9 +148,10 @@ export const GatewayConfigSchema = z
               })
               .optional(),
           })
-          .optional(),
-      })
-      .optional(),
+           .optional(),
+         localToken: SecretInputSchema.optional().register(sensitive),
+       })
+       .optional(),
     roles: z
       .strictObject({
         default: GatewayOperatorRoleNameSchema,
