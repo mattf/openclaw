@@ -191,7 +191,7 @@ export type CustomApiResult = {
 type ApplyCustomApiConfigParams = {
   config: OpenClawConfig;
   baseUrl: string;
-  modelId: string;
+  modelId?: string;
   compatibility: CustomApiCompatibility;
   apiKey?: SecretInput;
   providerId?: string;
