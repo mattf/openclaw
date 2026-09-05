@@ -159,6 +159,8 @@ export abstract class ChatPaneLayoutRender extends ChatPaneBrowserAnnotationRend
       hasBoard: !this.compact && board.hasBoard,
       chat,
       workspace: renderSessionWorkspaceRail(sessionWorkspace, { embedded: true }),
+      workspaceUpload: sessionWorkspace.uploadFile,
+      workspaceUploadDisabled: (sessionWorkspace.list?.browser?.search?.length ?? 0) > 0,
       tasks: renderBackgroundTasksRail(backgroundTasks, { embedded: true }),
       detailOpen: this.presented && sidebarLayout.open === true && detailSlotOpen(sidebarLayout),
       renderDetail: (content) =>

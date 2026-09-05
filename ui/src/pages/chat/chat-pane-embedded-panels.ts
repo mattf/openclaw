@@ -27,6 +27,7 @@ import type {
 import type { SidebarContent } from "./components/chat-sidebar.ts";
 import type { SessionDiscussionPanelConfig } from "./components/session-discussion-panel.ts";
 import type { SidebarSlotId } from "./sidebar-layout-types.ts";
+import "../../components/tooltip.ts";
 
 type SidebarPanelDefinitionParams = {
   state: ChatPageHost;
@@ -42,6 +43,8 @@ type SidebarPanelDefinitionParams = {
   hasBoard: boolean;
   chat: TemplateResult;
   workspace: TemplateResult | typeof nothing;
+  workspaceUpload?: () => Promise<void>;
+  workspaceUploadDisabled?: boolean;
   tasks: TemplateResult | typeof nothing;
   detailOpen: boolean;
   renderDetail: (content: SidebarContent) => TemplateResult;
@@ -212,6 +215,27 @@ export function sidebarPanelDefinitions(
     definePanel("browser", "browser", icons.globe, browser, { available: browserAvailable }),
     definePanel("workspace", "files", icons.fileText, workspaceContent, {
       shortcut: formatKeyboardShortcutCombo(KEYBOARD_SHORTCUT_COMBOS.workspaceFiles),
+      ...(params
+        ? {
+            headerAction: html`
+              <openclaw-tooltip
+                .content=${params.workspaceUploadDisabled
+                  ? t("chat.workspaceFiles.uploadDisabledSearch")
+                  : t("chat.workspaceFiles.upload")}
+              >
+                <button
+                  class="rail-header__action chat-workspace-rail__upload"
+                  type="button"
+                  aria-label=${t("chat.workspaceFiles.upload")}
+                  ?disabled=${params.workspaceUploadDisabled ?? false}
+                  @click=${() => void params.workspaceUpload?.()}
+                >
+                  ${icons.folderUp}
+                </button>
+              </openclaw-tooltip>
+            `,
+          }
+        : {}),
     }),
     definePanel(
       "companion",
