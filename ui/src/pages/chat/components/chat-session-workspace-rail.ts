@@ -120,7 +120,6 @@ export function renderSessionWorkspaceRail(
   const hasBrowserItems = (browser?.entries.length ?? 0) > 0;
   const hasItems = hasSessionItems || hasBrowserItems;
   const renderPathActions = (path: string, origin: "session" | "workspace"): TemplateResult => {
-    const isSessionOrigin = origin === "session";
     return html`
       <span
         class="chat-workspace-rail__row-actions"
@@ -140,25 +139,21 @@ export function renderSessionWorkspaceRail(
             ${icons.eye}
           </button>
         </openclaw-tooltip>
-        ${isSessionOrigin
-          ? html`
-              <openclaw-tooltip .content=${t("chat.workspaceFiles.download")}>
-                <button
-                  class="chat-workspace-rail__row-action"
-                  type="button"
-                  aria-label=${t("chat.workspaceFiles.download")}
-                  @click=${(event: Event) => {
-                    event.stopPropagation();
-                    void sessionWorkspace.capability.downloadFile(sessionWorkspace.sessionKey, path, {
-                      agentId: sessionWorkspace.capabilityAgentId,
-                    });
-                  }}
-                >
-                  ${icons.folderDown}
-                </button>
-              </openclaw-tooltip>
-            `
-          : nothing}
+        <openclaw-tooltip .content=${t("chat.workspaceFiles.download")}>
+          <button
+            class="chat-workspace-rail__row-action"
+            type="button"
+            aria-label=${t("chat.workspaceFiles.download")}
+            @click=${(event: Event) => {
+              event.stopPropagation();
+              void sessionWorkspace.capability.downloadFile(sessionWorkspace.sessionKey, path, {
+                agentId: sessionWorkspace.capabilityAgentId,
+              });
+            }}
+          >
+            ${icons.folderDown}
+          </button>
+        </openclaw-tooltip>
         <span @click=${(event: Event) => event.stopPropagation()}>
           ${renderCopyButton(path, t("chat.workspaceFiles.copyPath"))}
         </span>
